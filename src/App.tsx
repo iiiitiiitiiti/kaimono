@@ -711,7 +711,8 @@ function Adder({
             autoComplete="off"
             enterKeyHint="done"
           />
-          <button className="btn primary add-btn" type="submit" disabled={!cleaned}>
+          {/* 押しても入力欄から離れない。離れるとキーボードが閉じて足す欄が下へ動き、指を離す前にボタンが逃げる（2026-11-04 ユーザー指摘） */}
+          <button className="btn primary add-btn" type="submit" disabled={!cleaned} onPointerDown={keepFocus} onMouseDown={keepFocus}>
             足す
           </button>
         </div>
