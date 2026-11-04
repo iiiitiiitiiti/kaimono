@@ -622,6 +622,7 @@ function Adder({
       setName("");
       setNote("");
       setPicked(null);
+      setPicking(false);
     }
     inputRef.current?.focus();
   };
@@ -658,8 +659,8 @@ function Adder({
                 onPointerDown={keepFocus}
                 onMouseDown={keepFocus}
                 onClick={() => {
+                  // 選んでも一覧は閉じない（選び直しやすくする。閉じるのはお店のボタンか、足したとき）
                   setPicked(s);
-                  setPicking(false);
                   backToField();
                 }}
               >

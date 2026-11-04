@@ -674,6 +674,11 @@ body:has(.app) {
   max-width: var(--w);
   margin: 0 auto;
 }
+.section-picker .chip {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+}
 .section-picker .chip[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
