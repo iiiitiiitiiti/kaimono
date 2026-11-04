@@ -15,8 +15,8 @@ service cloud.firestore {
 
     // src/model.ts の SECTIONS と揃える
     function validSection(v) {
-      return v in ["野菜・果物", "肉・魚", "卵・乳製品・豆腐", "パン・米・麺", "調味料・乾物",
-                   "冷凍食品", "お菓子・飲み物", "日用品", "薬・コスメ", "その他"];
+      return v in ["スーパー", "ドラッグストア", "コンビニ", "100円ショップ", "ホームセンター",
+                   "家電量販店", "服屋", "本屋", "ネット通販", "その他"];
     }
 
     function validItem(d) {

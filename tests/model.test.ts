@@ -63,30 +63,39 @@ describe("historyId", () => {
 
 describe("guessSection", () => {
   it("手がかりの言葉から当てる", () => {
-    expect(guessSection("牛乳", [])).toBe("卵・乳製品・豆腐");
-    expect(guessSection("キャベツ", [])).toBe("野菜・果物");
-    expect(guessSection("豚こま", [])).toBe("肉・魚");
-    expect(guessSection("冷凍うどん", [])).toBe("冷凍食品");
-    expect(guessSection("トイレットペーパー", [])).toBe("日用品");
+    expect(guessSection("牛乳", [])).toBe("スーパー");
+    expect(guessSection("冷凍うどん", [])).toBe("スーパー");
+    expect(guessSection("トイレットペーパー", [])).toBe("ドラッグストア");
+    expect(guessSection("舌ブラシ", [])).toBe("ドラッグストア");
+    expect(guessSection("単3電池", [])).toBe("家電量販店");
+    expect(guessSection("園芸用の土", [])).toBe("ホームセンター");
+    expect(guessSection("文庫本", [])).toBe("本屋");
+  });
+  it("食べ物の言葉を含む別の物を取り違えない", () => {
+    expect(guessSection("パンツ", [])).toBe("服屋");
+    expect(guessSection("灯油", [])).toBe("ホームセンター");
+    expect(guessSection("フライパン", [])).toBe("ホームセンター");
+    expect(guessSection("水着", [])).toBe("服屋");
+    expect(guessSection("茶碗", [])).toBe("100円ショップ");
   });
   it("当たらなければその他", () => {
     expect(guessSection("ふしぎな物", [])).toBe("その他");
   });
   it("過去に足した売り場を優先する", () => {
-    expect(guessSection("牛乳", [hist({ name: "ぎゅうにゅう", section: "その他" })])).toBe("卵・乳製品・豆腐");
+    expect(guessSection("牛乳", [hist({ name: "ぎゅうにゅう", section: "その他" })])).toBe("スーパー");
     expect(guessSection("ギュウニュウ", [hist({ name: "ぎゅうにゅう", section: "その他" })])).toBe("その他");
   });
 });
 
 describe("groupBySection", () => {
-  it("売り場の順に並べ、チェック済みは除く", () => {
+  it("お店の順に並べ、チェック済みは除く", () => {
     const g = groupBySection([
-      item({ name: "a", section: "日用品", createdAt: 1 }),
-      item({ name: "b", section: "野菜・果物", createdAt: 2 }),
-      item({ name: "c", section: "野菜・果物", createdAt: 1 }),
-      item({ name: "d", section: "肉・魚", checked: true }),
+      item({ name: "a", section: "ドラッグストア", createdAt: 1 }),
+      item({ name: "b", section: "スーパー", createdAt: 2 }),
+      item({ name: "c", section: "スーパー", createdAt: 1 }),
+      item({ name: "d", section: "本屋", checked: true }),
     ]);
-    expect(g.map((x) => x.section)).toEqual(["野菜・果物", "日用品"]);
+    expect(g.map((x) => x.section)).toEqual(["スーパー", "ドラッグストア"]);
     expect(g[0].items.map((i) => i.name)).toEqual(["c", "b"]);
   });
 });

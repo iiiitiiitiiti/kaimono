@@ -597,7 +597,7 @@ function Adder({
   const [focused, setFocused] = useState(false);
   const [picking, setPicking] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  // 売り場を選んだあと、さっきまで打っていた欄へ戻す
+  // お店を選んだあと、さっきまで打っていた欄へ戻す
   const lastFieldRef = useRef<HTMLInputElement | null>(null);
   useKeyboardFirst(formRef, proxyRef);
 
@@ -606,7 +606,7 @@ function Adder({
   const chips = suggestions(history, items, name);
   const showPicker = picking && focused && !!cleaned;
 
-  // 売り場のボタンを押しても入力欄からフォーカスを外さない（キーボードを閉じさせない）
+  // お店のボタンを押しても入力欄からフォーカスを外さない（キーボードを閉じさせない）
   const keepFocus = (e: React.PointerEvent | React.MouseEvent) => {
     if (lastFieldRef.current && document.activeElement === lastFieldRef.current) e.preventDefault();
   };
@@ -647,7 +647,7 @@ function Adder({
     >
       <div className="adder-inner">
         {showPicker && (
-          <div id="section-picker" className="section-picker" role="group" aria-label="売り場">
+          <div id="section-picker" className="section-picker" role="group" aria-label="お店">
             {SECTIONS.map((s) => (
               <button
                 key={s}
@@ -716,7 +716,7 @@ function Adder({
             <button
               type="button"
               className="section-btn"
-              aria-label={`売り場: ${section}`}
+              aria-label={`お店: ${section}`}
               aria-expanded={showPicker}
               aria-controls="section-picker"
               onPointerDown={keepFocus}
@@ -811,7 +811,7 @@ function EditDialog({
           <input value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </label>
         <label>
-          <span>売り場</span>
+          <span>お店</span>
           <select value={section} onChange={(e) => setSection(e.target.value as Section)}>
             {SECTIONS.map((s) => (
               <option key={s} value={s}>

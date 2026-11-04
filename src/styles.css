@@ -17,7 +17,7 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --w: 560px;
 
-  /* 売り場ごとの印の色（野菜〜その他の順） */
+  /* お店ごとの印の色（スーパー〜その他の順） */
   --s0: #4caf50;
   --s1: #e2574c;
   --s2: #f2b632;
@@ -629,7 +629,7 @@ body:has(.app) {
 .adder .extra {
   animation: rise 0.25s var(--ease-out);
 }
-/* 売り場は画面の中のボタンで選ぶ（iPhone の選択メニューはキーボードを閉じてしまうため） */
+/* お店は画面の中のボタンで選ぶ（iPhone の選択メニューはキーボードを閉じてしまうため） */
 .section-btn {
   flex: none;
   display: flex;
