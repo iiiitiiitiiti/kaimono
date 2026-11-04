@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  checkedBySection,
   checkedItems,
   cleanName,
   findOpenDuplicate,
@@ -225,6 +226,7 @@ function ListScreen({
 
   const groups = groupBySection(items.filter(inShown));
   const basket = checkedItems(items.filter(inShown));
+  const basketGroups = checkedBySection(items.filter(inShown));
   const openCount = items.filter((i) => !i.checked).length;
 
   // かごに入れるときは、行を縮めてから移す（並びが一瞬で飛ばないように）
@@ -357,21 +359,28 @@ function ListScreen({
               <button className="basket-clear" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
                 まとめて消す
               </button>
-              <ul className="items">
-                {basket.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    leaving={false}
-                    flash={flash === item.id}
-                    swiped={swiped === item.id}
-                    onSwipe={(open) => setSwiped(open ? item.id : null)}
-                    onCheck={() => check(item)}
-                    onEdit={() => setEditing(item)}
-                    onDelete={() => removeWithUndo([item], `「${item.name}」を消しました`)}
-                  />
-                ))}
-              </ul>
+              {basketGroups.map((g) => (
+                <section key={g.section} className="basket-group" aria-labelledby={`done-${g.section}`}>
+                  <h3 id={`done-${g.section}`} className="sec">
+                    {g.section}
+                  </h3>
+                  <ul className="items">
+                    {g.items.map((item) => (
+                      <ItemRow
+                        key={item.id}
+                        item={item}
+                        leaving={false}
+                        flash={flash === item.id}
+                        swiped={swiped === item.id}
+                        onSwipe={(open) => setSwiped(open ? item.id : null)}
+                        onCheck={() => check(item)}
+                        onEdit={() => setEditing(item)}
+                        onDelete={() => removeWithUndo([item], `「${item.name}」を消しました`)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ))}
             </details>
           )}
         </div>

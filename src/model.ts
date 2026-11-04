@@ -110,6 +110,14 @@ export function checkedItems(items: Item[]): Item[] {
     .sort((a, b) => (b.checkedAt ?? b.createdAt) - (a.checkedAt ?? a.createdAt));
 }
 
+/** 買った物を売り場の順にまとめる。売り場の中はチェックしたのが新しい順 */
+export function checkedBySection(items: Item[]): SectionGroup[] {
+  const checked = checkedItems(items);
+  return SECTIONS.map((section) => ({ section, items: checked.filter((i) => i.section === section) })).filter(
+    (g) => g.items.length > 0,
+  );
+}
+
 /** よく買う物の候補。リストに載っている（未チェックの）物は除き、入力があれば絞り込む */
 export function suggestions(history: HistoryEntry[], items: Item[], query: string, limit = 12): HistoryEntry[] {
   const onList = new Set(items.filter((i) => !i.checked).map((i) => nameKey(i.name)));

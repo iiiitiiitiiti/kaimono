@@ -633,6 +633,17 @@ body:has(.app) {
 .basket-head .sec::before {
   background: var(--line);
 }
+/* 購入済みの中もお店ごとに分ける。印は付けず、買う物の見出しより小さくする */
+.basket-group + .basket-group {
+  margin-top: 12px;
+}
+.basket-group .sec {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.basket-group .sec::before {
+  display: none;
+}
 .basket .badge {
   background: color-mix(in srgb, var(--muted) 12%, transparent);
   color: var(--muted);

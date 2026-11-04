@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkedBySection,
   checkedItems,
   cleanName,
   findOpenDuplicate,
@@ -101,13 +102,26 @@ describe("groupBySection", () => {
 });
 
 describe("checkedItems", () => {
-  it("かごに入れた新しい順", () => {
+  it("チェックした新しい順", () => {
     const c = checkedItems([
       item({ name: "a", checked: true, checkedAt: 1 }),
       item({ name: "b", checked: true, checkedAt: 3 }),
       item({ name: "c" }),
     ]);
     expect(c.map((i) => i.name)).toEqual(["b", "a"]);
+  });
+});
+
+describe("checkedBySection", () => {
+  it("お店の順に並べ、お店の中はチェックした新しい順。買っていない物は除く", () => {
+    const g = checkedBySection([
+      item({ name: "a", section: "ドラッグストア", checked: true, checkedAt: 5 }),
+      item({ name: "b", section: "スーパー", checked: true, checkedAt: 1 }),
+      item({ name: "c", section: "スーパー", checked: true, checkedAt: 3 }),
+      item({ name: "d", section: "本屋" }),
+    ]);
+    expect(g.map((x) => x.section)).toEqual(["スーパー", "ドラッグストア"]);
+    expect(g[0].items.map((i) => i.name)).toEqual(["c", "b"]);
   });
 });
 
