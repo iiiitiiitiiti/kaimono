@@ -103,7 +103,7 @@ export function groupBySection(items: Item[]): SectionGroup[] {
   })).filter((g) => g.items.length > 0);
 }
 
-/** かごに入れた物。入れたのが新しい順 */
+/** 買った（チェックした）物。チェックしたのが新しい順 */
 export function checkedItems(items: Item[]): Item[] {
   return items
     .filter((i) => i.checked)

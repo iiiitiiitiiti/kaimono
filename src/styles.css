@@ -39,28 +39,6 @@
   color-scheme: light;
 }
 
-:root[data-theme="dark"] {
-  --bg: #141614;
-  --surface: #1f221f;
-  --text: #eef0ec;
-  --muted: #a3a99f;
-  --line: #333833;
-  --accent: #4cc283;
-  --accent-strong: #6fd69c;
-  --accent-text: #0b1a12;
-  --accent-soft: #1d3326;
-  --danger: #ff8a7a;
-  --flash: #4a4220;
-  --shadow: 0 10px 30px -14px rgb(0 0 0 / 70%);
-  --p0: #ff8a50;
-  --p1: #6cb4ff;
-  --p2: #da77f2;
-  --p3: #69db7c;
-  --p4: #f783ac;
-  --p5: #3bc9db;
-  color-scheme: dark;
-}
-
 *,
 *::before,
 *::after {
@@ -600,9 +578,10 @@ body:has(.app) {
 .who-5 { --pc: var(--p5); }
 
 .basket {
+  position: relative;
   margin-top: 28px;
 }
-/* かごに入れた物はふだん畳む（押すと開く） */
+/* 買った物はふだん畳む（押すと開く）。買う物より控えめに見せる */
 .basket-head {
   display: flex;
   align-items: center;
@@ -626,16 +605,53 @@ body:has(.app) {
 .basket[open]:not([data-closing]) .basket-head::after {
   transform: rotate(-135deg) translateY(-2px);
 }
-.basket-tools {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 6px;
+/* 見出しと同じ高さの右端に置く。閉じ始めたら先に消す */
+.basket-clear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-height: 44px;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.basket-clear:hover {
+  color: var(--danger);
+}
+.basket[data-closing] .basket-clear {
+  opacity: 0;
 }
 .basket-head .sec {
   margin: 0;
 }
 .basket-head .sec::before {
-  background: var(--accent);
+  background: var(--line);
+}
+.basket .badge {
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  color: var(--muted);
+}
+.basket .items {
+  background: var(--bg);
+}
+.basket .item:not(.flash) {
+  background: var(--bg);
+}
+.basket .name {
+  font-size: 0.95rem;
+}
+.basket .who {
+  --pc: var(--muted);
+}
+.basket .item.checked .check circle {
+  fill: var(--muted);
+  stroke: var(--muted);
 }
 .badge {
   display: inline-grid;

@@ -22,7 +22,6 @@ import { useList } from "./useList";
 
 const STORE_KEY = "kaimono:key";
 const STORE_ME = "kaimono:me";
-const STORE_THEME = "kaimono:theme";
 
 const read = (k: string): string | null => {
   try {
@@ -58,12 +57,9 @@ function loadKey(): string | null {
   return null;
 }
 
-type Theme = "light" | "dark";
-
 export function App() {
   const [listKey, setListKey] = useState<string | null>(loadKey);
   const [me, setMe] = useState<string | null>(() => read(STORE_ME));
-  const [theme, setTheme] = useState<Theme>(() => (read(STORE_THEME) === "dark" ? "dark" : "light"));
 
   useEffect(() => {
     const onHash = () => {
@@ -76,17 +72,6 @@ export function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#141614" : "#FBFAF6");
-  }, [theme]);
-
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    write(STORE_THEME, next);
-    setTheme(next);
-  };
 
   const saveMe = (name: string) => {
     const v = name.normalize("NFKC").trim().slice(0, PERSON_MAX);
@@ -102,7 +87,7 @@ export function App() {
 
   if (!listKey) return <NoKey onKey={useLink} />;
   if (me === null) return <NameSetup onDone={saveMe} />;
-  return <ListScreen listKey={listKey} me={me} onMe={saveMe} theme={theme} onTheme={toggleTheme} onKey={useLink} />;
+  return <ListScreen listKey={listKey} me={me} onMe={saveMe} onKey={useLink} />;
 }
 
 /* ---------- 鍵が無いとき ---------- */
@@ -192,15 +177,11 @@ function ListScreen({
   listKey,
   me,
   onMe,
-  theme,
-  onTheme,
   onKey,
 }: {
   listKey: string;
   me: string;
   onMe: (v: string) => void;
-  theme: Theme;
-  onTheme: () => void;
   onKey: (k: string) => void;
 }) {
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -303,9 +284,6 @@ function ListScreen({
           <p className="count" aria-live="polite">
             {state === "ready" ? (openCount > 0 ? `あと ${openCount} 品` : "") : ""}
           </p>
-          <button className="icon-btn" type="button" onClick={onTheme} aria-label={theme === "dark" ? "明るい表示にする" : "暗い表示にする"}>
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
           <button className="icon-btn" type="button" onClick={() => setMenuOpen(true)} aria-label="メニュー" aria-haspopup="dialog">
             <MenuIcon />
           </button>
@@ -343,7 +321,7 @@ function ListScreen({
             </details>
           )}
           {state === "ready" && groups.length === 0 && basket.length === 0 && <p className="empty">買う物はありません</p>}
-          {state === "ready" && groups.length === 0 && basket.length > 0 && <p className="empty">全部かごに入りました</p>}
+          {state === "ready" && groups.length === 0 && basket.length > 0 && <p className="empty">全部買いました</p>}
 
           {groups.map((g) => (
             <section key={g.section} className="group" aria-labelledby={`sec-${g.section}`}>
@@ -369,18 +347,16 @@ function ListScreen({
           ))}
 
           {basket.length > 0 && (
-            // かごに入れた物はふだん畳んでおく
+            // 買った物はふだん畳んでおく。「まとめて消す」は見出しの右に置く（見出しと品物の間を空けないため）
             <details className="group basket">
               <summary className="basket-head">
                 <h2 className="sec">
-                  かごに入れた <span className="badge">{basket.length}</span>
+                  購入済み <span className="badge">{basket.length}</span>
                 </h2>
               </summary>
-              <div className="basket-tools">
-                <button className="btn small" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
-                  まとめて消す
-                </button>
-              </div>
+              <button className="basket-clear" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
+                まとめて消す
+              </button>
               <ul className="items">
                 {basket.map((item) => (
                   <ItemRow
@@ -1022,17 +998,6 @@ function Logo({ small = false }: { small?: boolean }) {
   );
 }
 
-const MoonIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
-  </svg>
-);
-const SunIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="4.5" />
-    <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
-  </svg>
-);
 const MenuIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M4 7h16M4 12h16M4 17h16" />
