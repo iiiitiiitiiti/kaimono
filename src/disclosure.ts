@@ -49,8 +49,6 @@ export function animateDisclosures() {
     const summary = e.target.closest("summary");
     const el = summary?.parentElement;
     if (!summary || !(el instanceof HTMLDetailsElement) || el.querySelector(":scope > summary") !== summary) return;
-    // 動きを減らす設定の人には、ふつうの開け閉めのままにする
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     e.preventDefault();
     toggle(el, summary);
   });
