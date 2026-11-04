@@ -13,11 +13,17 @@ service cloud.firestore {
       return v is string && v.size() >= min && v.size() <= max;
     }
 
+    // src/model.ts の SECTIONS と揃える
+    function validSection(v) {
+      return v in ["野菜・果物", "肉・魚", "卵・乳製品・豆腐", "パン・米・麺", "調味料・乾物",
+                   "冷凍食品", "お菓子・飲み物", "日用品", "薬・コスメ", "その他"];
+    }
+
     function validItem(d) {
       return d.keys().hasAll(["name", "section", "checked", "createdAt"])
         && d.keys().hasOnly(["name", "section", "note", "addedBy", "checked", "createdAt", "checkedAt"])
         && shortString(d.name, 1, 60)
-        && shortString(d.section, 1, 20)
+        && validSection(d.section)
         && (!("note" in d) || shortString(d.note, 0, 100))
         && (!("addedBy" in d) || shortString(d.addedBy, 0, 20))
         && d.checked is bool
@@ -28,7 +34,7 @@ service cloud.firestore {
     function validHistory(d) {
       return d.keys().hasOnly(["name", "section", "count", "lastAt"])
         && shortString(d.name, 1, 60)
-        && shortString(d.section, 1, 20)
+        && validSection(d.section)
         && d.count is int && d.count >= 0
         && d.lastAt is timestamp;
     }

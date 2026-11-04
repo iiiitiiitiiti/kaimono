@@ -206,7 +206,14 @@ function ListScreen({
   const showToast = useCallback((message: string, action?: ToastState["action"]) => {
     setToast({ id: Date.now(), message, action });
   }, []);
-  const onWriteError = useCallback(() => showToast("保存できませんでした。つながってからもう一度試してください"), [showToast]);
+  const clearToast = useCallback(() => setToast(null), []);
+  // 保存の失敗は別に出す（同じ枠だと「取り消す」の案内を消してしまう）
+  const [error, setError] = useState<ToastState | null>(null);
+  const clearError = useCallback(() => setError(null), []);
+  const onWriteError = useCallback(
+    () => setError({ id: Date.now(), message: "保存できませんでした。つながってからもう一度試してください" }),
+    [],
+  );
   const { items, history, state, actions } = useList(listKey, onWriteError);
 
   const [editing, setEditing] = useState<Item | null>(null);
@@ -263,7 +270,8 @@ function ListScreen({
         指で足す欄を押したとき、先にキーボードを出すための見えない欄（keyboardFirst.ts）。
         画面の上端に置くため .app の直下に置く（足す欄の中だと足す欄の上端になる）。キーボードの種類は本物と揃える
       */}
-      <input ref={proxyRef} className="keyboard-proxy" tabIndex={-1} aria-label="買う物を足す" autoComplete="off" enterKeyHint="done" />
+      {/* 読み上げで選ばれると本物へ移れないので、読み上げからは隠す */}
+      <input ref={proxyRef} className="keyboard-proxy" tabIndex={-1} aria-hidden="true" autoComplete="off" enterKeyHint="done" />
       <header className="top">
         <div className="top-inner">
           <h1 className="title">
@@ -387,7 +395,10 @@ function ListScreen({
         />
       )}
 
-      <Toast toast={toast} onDone={() => setToast(null)} />
+      <div className="toast-area" aria-live="polite">
+        {error && <Toast key={`error-${error.id}`} toast={error} onDone={clearError} />}
+        {toast && <Toast key={toast.id} toast={toast} onDone={clearToast} />}
+      </div>
     </div>
   );
 }
@@ -753,30 +764,25 @@ function MenuDialog({
 
 /* ---------- トースト ---------- */
 
-function Toast({ toast, onDone }: { toast: ToastState | null; onDone: () => void }) {
+function Toast({ toast, onDone }: { toast: ToastState; onDone: () => void }) {
   useEffect(() => {
-    if (!toast) return;
     const t = window.setTimeout(onDone, toast.action ? 6000 : 3000);
     return () => window.clearTimeout(t);
   }, [toast, onDone]);
   return (
-    <div className="toast-area" aria-live="polite">
-      {toast && (
-        <div className="toast" key={toast.id}>
-          <span>{toast.message}</span>
-          {toast.action && (
-            <button
-              type="button"
-              className="toast-action"
-              onClick={() => {
-                toast.action!.run();
-                onDone();
-              }}
-            >
-              {toast.action.label}
-            </button>
-          )}
-        </div>
+    <div className="toast">
+      <span>{toast.message}</span>
+      {toast.action && (
+        <button
+          type="button"
+          className="toast-action"
+          onClick={() => {
+            toast.action!.run();
+            onDone();
+          }}
+        >
+          {toast.action.label}
+        </button>
       )}
     </div>
   );

@@ -113,8 +113,15 @@ export function useList(listKey: string, onWriteError: () => void) {
         const data: DocumentData = { name, section, checked: false, createdAt: serverTimestamp() };
         if (note) data.note = note;
         if (addedBy) data.addedBy = addedBy;
-        run(setDoc(ref, data));
-        run(touchHistory(name, section, 1));
+        // 品物とよく買う物の回数は一緒に書く（片方だけ残ると回数がずれる）
+        const batch = writeBatch(refs.db);
+        batch.set(ref, data);
+        batch.set(
+          doc(refs.history, historyId(name)),
+          { name, section, count: increment(1), lastAt: serverTimestamp() },
+          { merge: true },
+        );
+        run(batch.commit());
         return ref.id;
       },
       toggle(item: Item) {
