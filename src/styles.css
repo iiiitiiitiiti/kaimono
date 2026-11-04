@@ -269,13 +269,15 @@ body:has(.app) {
 }
 .app {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--vvh, 100dvh);
-  transform: translateY(var(--vvtop, 0px));
+  inset: 0;
   display: flex;
   flex-direction: column;
+}
+/* 見えている範囲に合わせるのはキーボードが出ている間だけ。閉じたあとの iPhone の報告値は小さいまま残ることがあり、下が空いた（2026-11-04 ユーザー指摘） */
+:root[data-kb] .app {
+  bottom: auto;
+  height: var(--vvh);
+  transform: translateY(var(--vvtop));
 }
 
 .top {
