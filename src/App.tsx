@@ -595,12 +595,25 @@ function Adder({
   const [note, setNote] = useState("");
   const [picked, setPicked] = useState<Section | null>(null);
   const [focused, setFocused] = useState(false);
+  const [picking, setPicking] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  useKeyboardFirst(inputRef, proxyRef);
+  // 売り場を選んだあと、さっきまで打っていた欄へ戻す
+  const lastFieldRef = useRef<HTMLInputElement | null>(null);
+  useKeyboardFirst(formRef, proxyRef);
 
   const cleaned = cleanName(name);
   const section = picked ?? (cleaned ? guessSection(cleaned, history) : "その他");
   const chips = suggestions(history, items, name);
+  const showPicker = picking && focused && !!cleaned;
+
+  // 売り場のボタンを押しても入力欄からフォーカスを外さない（キーボードを閉じさせない）
+  const keepFocus = (e: React.PointerEvent | React.MouseEvent) => {
+    if (lastFieldRef.current && document.activeElement === lastFieldRef.current) e.preventDefault();
+  };
+  const backToField = () => {
+    const f = lastFieldRef.current;
+    if (f && document.contains(f) && document.activeElement !== f) f.focus({ preventScroll: true });
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -618,16 +631,43 @@ function Adder({
       ref={formRef}
       className={`adder${focused ? " open" : ""}`}
       onSubmit={submit}
-      onFocus={() => setFocused(true)}
+      onFocus={(e) => {
+        setFocused(true);
+        if (e.target instanceof HTMLInputElement) lastFieldRef.current = e.target;
+      }}
       onBlur={(e) => {
-        if (!formRef.current?.contains(e.relatedTarget as Node)) setFocused(false);
+        if (!formRef.current?.contains(e.relatedTarget as Node)) {
+          setFocused(false);
+          setPicking(false);
+        }
       }}
       onKeyDown={(e) => {
         if (e.key === "Escape") (document.activeElement as HTMLElement | null)?.blur();
       }}
     >
       <div className="adder-inner">
-        {focused && chips.length > 0 && (
+        {showPicker && (
+          <div id="section-picker" className="section-picker" role="group" aria-label="売り場">
+            {SECTIONS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="chip"
+                aria-pressed={s === section}
+                onPointerDown={keepFocus}
+                onMouseDown={keepFocus}
+                onClick={() => {
+                  setPicked(s);
+                  setPicking(false);
+                  backToField();
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {focused && !showPicker && chips.length > 0 && (
           <div className="chips" role="group" aria-label="よく買う物">
             {chips.map((h) => (
               <button
@@ -658,7 +698,10 @@ function Adder({
             maxLength={NAME_MAX}
             onChange={(e) => {
               setName(e.target.value);
-              if (!e.target.value) setPicked(null);
+              if (!e.target.value) {
+                setPicked(null);
+                setPicking(false);
+              }
             }}
             placeholder="買う物を足す"
             autoComplete="off"
@@ -670,16 +713,24 @@ function Adder({
         </div>
         {cleaned && (
           <div className="row extra">
-            <label htmlFor="new-section" className="sr-only">
-              売り場
-            </label>
-            <select id="new-section" value={section} onChange={(e) => setPicked(e.target.value as Section)}>
-              {SECTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            <button
+              type="button"
+              className="section-btn"
+              aria-label={`売り場: ${section}`}
+              aria-expanded={showPicker}
+              aria-controls="section-picker"
+              onPointerDown={keepFocus}
+              onMouseDown={keepFocus}
+              onClick={() => {
+                setPicking((p) => !p);
+                backToField();
+              }}
+            >
+              <span>{section}</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={showPicker ? "M7 14l5-5 5 5" : "M7 10l5 5 5-5"} />
+              </svg>
+            </button>
             <label htmlFor="new-note" className="sr-only">
               数量・メモ
             </label>

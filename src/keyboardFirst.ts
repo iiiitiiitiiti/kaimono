@@ -7,20 +7,22 @@ const STORE_OFF = "kaimono:keyboard-first-off";
  * キーボードが出る間にページ全体を上へずらす。ずれが終わってから画面を戻すので、
  * ヘッダーが一度消えて戻ってくるように見える。
  *
- * そこで指で押したときは、まず画面の一番上にある見えない欄でキーボードを出す（上の欄は隠れないので、ずらされない）。
- * キーボードが出きって画面が縮んだら、本物の入力欄へ移す。そのとき本物はキーボードのすぐ上にあり、隠れないので、やはりずらされない。
+ * そこで足す欄の入力欄（品名・数量メモ）を指で押したときは、自分でフォーカスを動かす。
+ * - キーボードが閉じているとき: まず画面の一番上にある見えない欄でキーボードを出す（上の欄は隠れないので、ずらされない）。
+ *   キーボードが出きって画面が縮んだら、押した入力欄へ移す。そのとき入力欄はキーボードのすぐ上にあり、隠れないので、やはりずらされない。
+ * - キーボードが出ているとき（品名から数量メモへ移るなど）: ずらさない指定でそのまま移す。
  *
  * 移し替えが効かなかった（キーボードが閉じた）端末では、次からこの仕掛けを使わない。
  */
 export function useKeyboardFirst(
-  inputRef: RefObject<HTMLInputElement | null>,
+  formRef: RefObject<HTMLElement | null>,
   proxyRef: RefObject<HTMLInputElement | null>,
 ): void {
   useEffect(() => {
-    const input = inputRef.current;
+    const form = formRef.current;
     const proxy = proxyRef.current;
     const vv = window.visualViewport;
-    if (!input || !proxy || !vv) return;
+    if (!form || !proxy || !vv) return;
 
     const isOff = () => {
       try {
@@ -45,6 +47,13 @@ export function useKeyboardFirst(
         a instanceof HTMLSelectElement
       );
     };
+    // 移したあと、フォーカスが残っていなければ次から使わない
+    const focusAndCheck = (target: HTMLInputElement) => {
+      target.focus({ preventScroll: true });
+      window.setTimeout(() => {
+        if (document.activeElement !== target) turnOff();
+      }, 80);
+    };
 
     let startX = 0;
     let startY = 0;
@@ -57,12 +66,20 @@ export function useKeyboardFirst(
     };
 
     const onEnd = (e: TouchEvent) => {
-      if (isOff() || keyboardOpen()) return;
+      const target = e.target instanceof Element ? e.target.closest("input") : null;
+      if (!target || isOff()) return;
+      if (target === document.activeElement) return; // 入力中の欄の中を押した（文字の位置を動かす）
       const t = e.changedTouches[0];
       if (Math.hypot(t.clientX - startX, t.clientY - startY) > 10) return; // 指を滑らせただけ
-      e.preventDefault(); // 本物にはまだフォーカスさせない
-      proxy.focus({ preventScroll: true });
+      e.preventDefault(); // iPhone 自身にはフォーカスさせない
 
+      if (keyboardOpen()) {
+        focusAndCheck(target);
+        return;
+      }
+
+      cancelPending?.();
+      proxy.focus({ preventScroll: true });
       let done = false;
       const move = () => {
         if (done) return;
@@ -71,10 +88,7 @@ export function useKeyboardFirst(
         window.clearTimeout(timer);
         cancelPending = null;
         if (document.activeElement !== proxy) return; // その間にほかを押した
-        input.focus({ preventScroll: true });
-        window.setTimeout(() => {
-          if (document.activeElement !== input) turnOff();
-        }, 80);
+        focusAndCheck(target);
       };
       const onResize = () => {
         if (window.innerHeight - vv.height > 120) move();
@@ -90,12 +104,12 @@ export function useKeyboardFirst(
       };
     };
 
-    input.addEventListener("touchstart", onStart, { passive: true });
-    input.addEventListener("touchend", onEnd, { passive: false });
+    form.addEventListener("touchstart", onStart, { passive: true });
+    form.addEventListener("touchend", onEnd, { passive: false });
     return () => {
       cancelPending?.();
-      input.removeEventListener("touchstart", onStart);
-      input.removeEventListener("touchend", onEnd);
+      form.removeEventListener("touchstart", onStart);
+      form.removeEventListener("touchend", onEnd);
     };
-  }, [inputRef, proxyRef]);
+  }, [formRef, proxyRef]);
 }
