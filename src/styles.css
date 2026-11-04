@@ -318,6 +318,14 @@ body:has(.app) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/*
+ * 項目が少なくても、リストの欄がいつも1pxだけスクロールできるようにする。
+ * スクロールできない欄で指を動かすと、キーボードが出ている iPhone はページごとずらそうとし、
+ * src/viewport.ts の補正と取り合って画面が震える（2026-11-04 ユーザー指摘）。
+ */
+.list-content {
+  min-height: calc(100% + 1px);
   padding: 4px max(16px, calc((100% - var(--w)) / 2)) 24px;
 }
 .status,

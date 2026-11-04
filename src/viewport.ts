@@ -15,6 +15,17 @@ export function trackViewport(): void {
     root.toggleAttribute("data-kb", window.innerHeight - height > 120);
   };
 
+  // ヘッダーと足す欄はスクロールしない。ここで指を動かしてもページごとずらさせない（よく買う物の横スクロールと、入力欄の中のカーソル移動は残す）
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      const t = e.target;
+      if (!(t instanceof Element) || t.closest(".chips, input, textarea, select")) return;
+      if (t.closest(".app > .top, .app > .adder")) e.preventDefault();
+    },
+    { passive: false },
+  );
+
   vv?.addEventListener("resize", apply);
   vv?.addEventListener("scroll", apply);
   window.addEventListener("resize", apply);

@@ -283,55 +283,57 @@ function ListScreen({
       </header>
 
       <main className="list-area" tabIndex={-1}>
-        {state === "loading" && <p className="status">読み込み中…</p>}
-        {state === "offline-timeout" && (
-          <div className="status">
-            <p>つながりません。電波のよい所で開き直してください。</p>
-            <button className="btn" type="button" onClick={() => window.location.reload()}>
-              開き直す
-            </button>
-          </div>
-        )}
-        {state === "ready" && groups.length === 0 && basket.length === 0 && <p className="empty">買う物はありません</p>}
-        {state === "ready" && groups.length === 0 && basket.length > 0 && <p className="empty">全部かごに入りました</p>}
-
-        {groups.map((g) => (
-          <section key={g.section} className="group" aria-labelledby={`sec-${g.section}`}>
-            <h2 id={`sec-${g.section}`} className={`sec sec-${SECTIONS.indexOf(g.section)}`}>
-              {g.section}
-            </h2>
-            <ul className="items">
-              {g.items.map((item) => (
-                <ItemRow
-                  key={item.id}
-                  item={item}
-                  leaving={leaving.has(item.id)}
-                  flash={flash === item.id}
-                  onCheck={() => check(item)}
-                  onEdit={() => setEditing(item)}
-                />
-              ))}
-            </ul>
-          </section>
-        ))}
-
-        {basket.length > 0 && (
-          <section className="group basket" aria-labelledby="sec-basket">
-            <div className="basket-head">
-              <h2 id="sec-basket" className="sec">
-                かごに入れた <span className="badge">{basket.length}</span>
-              </h2>
-              <button className="btn small" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
-                まとめて消す
+        <div className="list-content">
+          {state === "loading" && <p className="status">読み込み中…</p>}
+          {state === "offline-timeout" && (
+            <div className="status">
+              <p>つながりません。電波のよい所で開き直してください。</p>
+              <button className="btn" type="button" onClick={() => window.location.reload()}>
+                開き直す
               </button>
             </div>
-            <ul className="items">
-              {basket.map((item) => (
-                <ItemRow key={item.id} item={item} leaving={false} flash={flash === item.id} onCheck={() => check(item)} onEdit={() => setEditing(item)} />
-              ))}
-            </ul>
-          </section>
-        )}
+          )}
+          {state === "ready" && groups.length === 0 && basket.length === 0 && <p className="empty">買う物はありません</p>}
+          {state === "ready" && groups.length === 0 && basket.length > 0 && <p className="empty">全部かごに入りました</p>}
+
+          {groups.map((g) => (
+            <section key={g.section} className="group" aria-labelledby={`sec-${g.section}`}>
+              <h2 id={`sec-${g.section}`} className={`sec sec-${SECTIONS.indexOf(g.section)}`}>
+                {g.section}
+              </h2>
+              <ul className="items">
+                {g.items.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    leaving={leaving.has(item.id)}
+                    flash={flash === item.id}
+                    onCheck={() => check(item)}
+                    onEdit={() => setEditing(item)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+
+          {basket.length > 0 && (
+            <section className="group basket" aria-labelledby="sec-basket">
+              <div className="basket-head">
+                <h2 id="sec-basket" className="sec">
+                  かごに入れた <span className="badge">{basket.length}</span>
+                </h2>
+                <button className="btn small" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
+                  まとめて消す
+                </button>
+              </div>
+              <ul className="items">
+                {basket.map((item) => (
+                  <ItemRow key={item.id} item={item} leaving={false} flash={flash === item.id} onCheck={() => check(item)} onEdit={() => setEditing(item)} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       </main>
 
       <Adder
