@@ -29,7 +29,13 @@ export function trackViewport(): void {
     (e) => {
       const t = e.target;
       if (!(t instanceof Element) || t.closest(".chips, input, textarea, select")) return;
-      if (t.closest(".app > .top, .app > .adder")) e.preventDefault();
+      if (t.closest(".app > .top, .app > .adder")) {
+        e.preventDefault();
+        return;
+      }
+      // リストが画面に収まっているときは、なぞっても跳ねさせない（行を横になぞる操作は別の仕組みなので残る）
+      const list = t.closest(".list-area");
+      if (list && !root.hasAttribute("data-kb") && list.scrollHeight <= list.clientHeight) e.preventDefault();
     },
     { passive: false },
   );
