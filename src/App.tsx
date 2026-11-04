@@ -16,6 +16,7 @@ import {
   type Item,
   type Section,
 } from "./model";
+import { useKeyboardFirst } from "./keyboardFirst";
 import { useList } from "./useList";
 
 const STORE_KEY = "kaimono:key";
@@ -213,6 +214,7 @@ function ListScreen({
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const [flash, setFlash] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const proxyRef = useRef<HTMLInputElement>(null);
 
   const groups = groupBySection(items);
   const basket = checkedItems(items);
@@ -257,6 +259,11 @@ function ListScreen({
 
   return (
     <div className="app">
+      {/*
+        指で足す欄を押したとき、先にキーボードを出すための見えない欄（keyboardFirst.ts）。
+        画面の上端に置くため .app の直下に置く（足す欄の中だと足す欄の上端になる）。キーボードの種類は本物と揃える
+      */}
+      <input ref={proxyRef} className="keyboard-proxy" tabIndex={-1} aria-label="買う物を足す" autoComplete="off" enterKeyHint="done" />
       <header className="top">
         <div className="top-inner">
           <h1 className="title">
@@ -329,6 +336,7 @@ function ListScreen({
 
       <Adder
         inputRef={inputRef}
+        proxyRef={proxyRef}
         items={items}
         history={history}
         onAdd={(name, section, note) => {
@@ -427,12 +435,14 @@ function ItemRow({
 
 function Adder({
   inputRef,
+  proxyRef,
   items,
   history,
   onAdd,
   onQuickAdd,
 }: {
   inputRef: React.RefObject<HTMLInputElement | null>;
+  proxyRef: React.RefObject<HTMLInputElement | null>;
   items: Item[];
   history: HistoryEntry[];
   onAdd: (name: string, section: Section, note: string) => boolean;
@@ -443,6 +453,7 @@ function Adder({
   const [picked, setPicked] = useState<Section | null>(null);
   const [focused, setFocused] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  useKeyboardFirst(inputRef, proxyRef);
 
   const cleaned = cleanName(name);
   const section = picked ?? (cleaned ? guessSection(cleaned, history) : "その他");

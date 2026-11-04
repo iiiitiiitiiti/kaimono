@@ -544,6 +544,20 @@ body:has(.app) {
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
 }
+/* 画面の一番上に置く見えない入力欄（.app の中の fixed なので、見えている範囲の上端になる） */
+.keyboard-proxy {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px; /* 16px 未満だと iPhone が拡大する */
+  pointer-events: none;
+}
 /* キーボードが出ている間は、画面の下の丸みや帯の分の余白は要らない */
 :root[data-kb] .adder {
   padding-bottom: 10px;
