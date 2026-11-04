@@ -220,6 +220,17 @@ function ListScreen({
   const [menuOpen, setMenuOpen] = useState(false);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const [flash, setFlash] = useState<string | null>(null);
+  // 左になぞってボタンを出している行（同時に開くのは1行だけ）
+  const [swiped, setSwiped] = useState<string | null>(null);
+  useEffect(() => {
+    if (!swiped) return;
+    // ほかの場所に触れたら閉じる
+    const close = (e: PointerEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest(`#item-${CSS.escape(swiped)}`)) setSwiped(null);
+    };
+    document.addEventListener("pointerdown", close, true);
+    return () => document.removeEventListener("pointerdown", close, true);
+  }, [swiped]);
   const inputRef = useRef<HTMLInputElement>(null);
   const proxyRef = useRef<HTMLInputElement>(null);
 
@@ -316,8 +327,11 @@ function ListScreen({
                     item={item}
                     leaving={leaving.has(item.id)}
                     flash={flash === item.id}
+                    swiped={swiped === item.id}
+                    onSwipe={(open) => setSwiped(open ? item.id : null)}
                     onCheck={() => check(item)}
                     onEdit={() => setEditing(item)}
+                    onDelete={() => removeWithUndo([item], `「${item.name}」を消しました`)}
                   />
                 ))}
               </ul>
@@ -336,7 +350,17 @@ function ListScreen({
               </div>
               <ul className="items">
                 {basket.map((item) => (
-                  <ItemRow key={item.id} item={item} leaving={false} flash={flash === item.id} onCheck={() => check(item)} onEdit={() => setEditing(item)} />
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    leaving={false}
+                    flash={flash === item.id}
+                    swiped={swiped === item.id}
+                    onSwipe={(open) => setSwiped(open ? item.id : null)}
+                    onCheck={() => check(item)}
+                    onEdit={() => setEditing(item)}
+                    onDelete={() => removeWithUndo([item], `「${item.name}」を消しました`)}
+                  />
                 ))}
               </ul>
             </section>
@@ -403,42 +427,148 @@ function ListScreen({
   );
 }
 
+/** 左になぞったときに出すボタンの幅の合計 */
+const SWIPE_W = 144;
+
 function ItemRow({
   item,
   leaving,
   flash,
+  swiped,
+  onSwipe,
   onCheck,
   onEdit,
+  onDelete,
 }: {
   item: Item;
   leaving: boolean;
   flash: boolean;
+  swiped: boolean;
+  onSwipe: (open: boolean) => void;
   onCheck: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 }) {
   const checked = item.checked || leaving;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const gesture = useRef({ id: -1, x: 0, y: 0, base: 0, offset: 0, mode: "idle" as "idle" | "pending" | "drag", eatClick: false });
+
+  const place = (x: number, animate: boolean) => {
+    const el = rowRef.current;
+    if (!el) return;
+    el.classList.toggle("dragging", !animate);
+    el.style.transform = x ? `translateX(${x}px)` : "";
+  };
+  useEffect(() => {
+    if (gesture.current.mode !== "drag") place(swiped ? -SWIPE_W : 0, true);
+  }, [swiped]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    g.eatClick = false;
+    if (leaving || (e.pointerType === "mouse" && e.button !== 0)) return;
+    Object.assign(g, { id: e.pointerId, x: e.clientX, y: e.clientY, base: swiped ? -SWIPE_W : 0, mode: "pending" });
+    g.offset = g.base;
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    if (e.pointerId !== g.id || g.mode === "idle") return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (g.mode === "pending") {
+      if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) {
+        g.mode = "idle"; // 縦になぞった＝スクロール
+        return;
+      }
+      if (Math.abs(dx) <= 8) return;
+      g.mode = "drag";
+      rowRef.current?.setPointerCapture(e.pointerId);
+    }
+    let x = Math.min(0, g.base + dx);
+    if (x < -SWIPE_W) x = -SWIPE_W + (x + SWIPE_W) / 3; // 出しきったあとは重くする
+    g.offset = x;
+    place(x, false);
+  };
+  const onPointerEnd = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    if (e.pointerId !== g.id) return;
+    const wasDrag = g.mode === "drag";
+    g.mode = "idle";
+    g.id = -1;
+    if (wasDrag) {
+      // なぞったあとの「押した」は行の中のボタンに渡さない
+      g.eatClick = true;
+      const open = g.offset < -SWIPE_W / 2;
+      place(open ? -SWIPE_W : 0, true);
+      if (open !== swiped) onSwipe(open);
+    } else if (swiped && e.type === "pointerup") {
+      // 開いている行を押したら、閉じるだけにする
+      g.eatClick = true;
+      onSwipe(false);
+    }
+  };
+
   return (
     <li id={`item-${item.id}`} className={`item-wrap${leaving ? " leaving" : ""}`}>
-      <div className={`item${checked ? " checked" : ""}${flash ? " flash" : ""}`}>
-        <button
-          className="check"
-          type="button"
-          role="checkbox"
-          aria-checked={checked}
-          aria-label={item.name}
-          onClick={onCheck}
-          disabled={leaving}
+      <div className="swipe">
+        <div className="swipe-actions" aria-hidden={!swiped}>
+          <button
+            type="button"
+            className="swipe-edit"
+            tabIndex={swiped ? 0 : -1}
+            onClick={() => {
+              onSwipe(false);
+              onEdit();
+            }}
+          >
+            直す
+          </button>
+          <button
+            type="button"
+            className="swipe-delete"
+            tabIndex={swiped ? 0 : -1}
+            onClick={() => {
+              onSwipe(false);
+              onDelete();
+            }}
+          >
+            消す
+          </button>
+        </div>
+        <div
+          ref={rowRef}
+          className={`item${checked ? " checked" : ""}${flash ? " flash" : ""}`}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
+          onClickCapture={(e) => {
+            if (!gesture.current.eatClick) return;
+            gesture.current.eatClick = false;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M7 12.5l3.2 3.2L17 9" />
-          </svg>
-        </button>
-        <button className="item-body" type="button" onClick={onEdit} aria-label={`${item.name}を直す`}>
-          <span className="name">{item.name}</span>
-          {item.note && <span className="note">{item.note}</span>}
-        </button>
-        {item.addedBy && <span className={`who who-${personColor(item.addedBy)}`}>{item.addedBy}</span>}
+          <button
+            className="check"
+            type="button"
+            role="checkbox"
+            aria-checked={checked}
+            aria-label={item.name}
+            onClick={onCheck}
+            disabled={leaving}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M7 12.5l3.2 3.2L17 9" />
+            </svg>
+          </button>
+          <button className="item-body" type="button" onClick={onEdit} aria-label={`${item.name}を直す`}>
+            <span className="name">{item.name}</span>
+            {item.note && <span className="note">{item.note}</span>}
+          </button>
+          {item.addedBy && <span className={`who who-${personColor(item.addedBy)}`}>{item.addedBy}</span>}
+        </div>
       </div>
     </li>
   );

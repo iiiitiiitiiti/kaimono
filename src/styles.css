@@ -393,8 +393,38 @@ body:has(.app) {
     opacity 0.3s ease;
   animation: item-in 0.35s var(--ease-out);
 }
-.item-wrap + .item-wrap .item {
+.item-wrap + .item-wrap .swipe {
   border-top: 1px solid var(--line);
+}
+/* 左になぞると、行の下に隠れた「直す」「消す」が出る */
+.swipe {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.swipe-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+}
+.swipe-actions button {
+  width: 72px;
+  border: 0;
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.swipe-edit {
+  background: #6a6f68;
+}
+.swipe-delete {
+  background: #c0392b;
+}
+.swipe-actions button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
 }
 .item-wrap.leaving {
   grid-template-rows: 0fr;
@@ -402,10 +432,21 @@ body:has(.app) {
   transition-delay: 0.12s;
 }
 .item {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: 0;
   overflow: hidden;
+  background: var(--surface);
+  /* 横の動きはこちらで受け取り、縦のスクロールはそのまま任せる */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    transform 0.25s var(--ease-out),
+    background-color 0.6s ease;
+}
+.item.dragging {
   transition: background-color 0.6s ease;
 }
 /* 行の中は外側の枠が切れるので、内側に描く */
