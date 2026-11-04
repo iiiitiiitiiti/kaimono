@@ -546,7 +546,8 @@ body:has(.app) {
   flex: none;
   position: relative;
   z-index: 6;
-  padding: 10px 12px calc(12px + max(env(safe-area-inset-bottom), 12px));
+  /* iPhone の下端の帯（ホームバー）の分だけ空ける。帯の上にさらに足すと空きすぎる（2026-11-04 ユーザー指摘） */
+  padding: 10px 12px max(env(safe-area-inset-bottom), 12px);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
