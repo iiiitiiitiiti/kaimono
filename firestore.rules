@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// リストは lists/{鍵} の下に置く。鍵そのものはリポに載せず、SHA-256 のハッシュだけを照合する。
+// lists の一覧取得や collectionGroup の照会は、下の match に当たらないので拒否される。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOurList(key) {
+      return hashing.sha256(key).toHexString().lower()
+        == "f66df5ace37b1877eb029629779052e5dd1cb6ffae53872cfc7e2e4b4828e1cf";
+    }
+
+    function shortString(v, min, max) {
+      return v is string && v.size() >= min && v.size() <= max;
+    }
+
+    function validItem(d) {
+      return d.keys().hasAll(["name", "section", "checked", "createdAt"])
+        && d.keys().hasOnly(["name", "section", "note", "addedBy", "checked", "createdAt", "checkedAt"])
+        && shortString(d.name, 1, 60)
+        && shortString(d.section, 1, 20)
+        && (!("note" in d) || shortString(d.note, 0, 100))
+        && (!("addedBy" in d) || shortString(d.addedBy, 0, 20))
+        && d.checked is bool
+        && d.createdAt is timestamp
+        && (!("checkedAt" in d) || d.checkedAt == null || d.checkedAt is timestamp);
+    }
+
+    function validHistory(d) {
+      return d.keys().hasOnly(["name", "section", "count", "lastAt"])
+        && shortString(d.name, 1, 60)
+        && shortString(d.section, 1, 20)
+        && d.count is int && d.count >= 0
+        && d.lastAt is timestamp;
+    }
+
+    match /lists/{key}/items/{itemId} {
+      allow read, delete: if isOurList(key);
+      allow create, update: if isOurList(key) && validItem(request.resource.data);
+    }
+
+    match /lists/{key}/history/{hid} {
+      allow read, delete: if isOurList(key);
+      allow create, update: if isOurList(key) && validHistory(request.resource.data);
+    }
+  }
+}

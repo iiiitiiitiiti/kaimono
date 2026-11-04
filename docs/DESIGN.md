@@ -1,0 +1,64 @@
+# 設計メモ
+
+2人（同居のカップル）で同じ買い物リストを見て、足して、チェックする PWA。
+
+## 結論
+
+- 画面は GitHub Pages（Vite + React + TypeScript）。共有の保存先は Firebase Firestore（Spark 無料枠、プロジェクト `kaimono-776d83`）。
+- ログインは無い。リストは `lists/{鍵}/…` に置き、鍵（128bit 乱数の16進32桁）を知っている人だけが読み書きできる。`firestore.rules` は鍵の SHA-256 だけを持ち、リポに鍵は載らない。
+- 鍵はリンク `https://iiiitiiitiiti.github.io/kaimono/#k=<鍵>` で渡す。鍵の本体はこの PC の `.secret-key`（git 管理外）にだけある。
+
+## なぜこの形か
+
+| 案 | 採らなかった理由 |
+|---|---|
+| Artifact の db | 相手にも Claude のアカウントと招待が要る。毎回 claude.ai を通る |
+| Firebase Auth の世帯共有アカウント（動物園ログと同じ） | サインイン方法の有効化と利用者作成に Firebase Console の手作業が要る。合言葉を2人が覚えて打つ必要がある。守るものが品目リストなので重さが見合わない |
+| 鍵をパスに入れる（採用） | 作成者の手作業ゼロ、相手はリンクを開くだけ。漏れたら鍵を作り直して rules を再デプロイする |
+
+レビュー（fable-advisor、2026-11-04）で A を支持。指摘を反映した点:
+
+- iPhone は Safari・LINE 内ブラウザ・ホーム画面のアプリで保存場所が別。鍵を URL から消すとホーム画面のアプリで鍵が無くなるので、鍵は URL のハッシュに残す。
+- そのためマニフェストを置かない（`start_url` で起動すると鍵が落ちる）。ホーム画面用の見た目は `index.html` の `apple-*` と `apple-touch-icon.png` で指定する。
+- rules は `hashing.sha256(key).toHexString().lower() == "<hex>"` で照合する。`lists` の一覧取得と collectionGroup は match が無いので拒否される。
+
+## データ
+
+```mermaid
+erDiagram
+    LIST ||--o{ ITEM : has
+    LIST ||--o{ HISTORY : remembers
+    LIST {
+        string key PK "鍵（文書は作らずパスにだけ使う）"
+    }
+    ITEM {
+        string id PK "自動 ID"
+    }
+    HISTORY {
+        string id PK "正規化した品名を encodeURIComponent"
+    }
+```
+
+- ITEM: 品名・売り場・数量メモ・足した人・チェック済みか・足した時刻・チェックした時刻。
+- HISTORY: 品名ごとの回数・最後に足した時刻・売り場。よく買う物の候補と売り場の推測に使う。品名の同一判定は全角半角・大小・空白・カタカナひらがなを無視（`nameKey`）。
+- 足した人の名前は端末ごとに覚える（localStorage）。
+
+## 決めたこと
+
+- 売り場は10種の固定（`src/model.ts` の `SECTIONS`）。品名から手がかり語で推測し、一度直した売り場は履歴で覚える。
+- チェックした物は「かごに入れた」に移り、「まとめて消す」で消す。消す操作には6秒間の取り消しが付く。
+- まだ買っていない同じ物は二重に足さず、既にある行を光らせる。
+- 店で電波が弱くても使えるよう、Firestore の端末内キャッシュ（persistentLocalCache）を使う。書き込みは待たずに画面へ出す。
+- 保存先の場所は nam5（米国）。`firebase deploy` が自動作成したため。端末内で先に反映されるので体感の遅れは出ない。東京へ移すならデータベースを作り直す。
+- 文字ファイル（Noto Sans JP、全部で約6MB）は最初に取り込まず、使った分だけキャッシュする。
+
+## やらないこと
+
+- 複数リスト（店ごとの切り替え）、ログイン、通知、価格の記録。
+
+## 鍵を作り直すとき
+
+1. 新しい鍵を作る: `node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"`
+2. その SHA-256 を `firestore.rules` の照合値に書き、`firebase deploy --only firestore:rules`
+3. 古い鍵のデータは読めなくなる（必要なら移してから差し替える）
+4. 新しいリンクを2人に送り直す
