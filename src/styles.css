@@ -654,12 +654,25 @@ body:has(.app) {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* 足す欄のすぐ上に重ねる（足す欄そのものの大きさは変えない） */
 .section-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+  animation: rise 0.25s var(--ease-out);
+}
+.section-picker-inner {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 2px 2px 4px;
-  animation: rise 0.25s var(--ease-out);
+  max-width: var(--w);
+  margin: 0 auto;
 }
 .section-picker .chip[aria-pressed="true"] {
   border-color: var(--accent);

@@ -645,9 +645,10 @@ function Adder({
         if (e.key === "Escape") (document.activeElement as HTMLElement | null)?.blur();
       }}
     >
-      <div className="adder-inner">
-        {showPicker && (
-          <div id="section-picker" className="section-picker" role="group" aria-label="お店">
+      {/* 一覧は足す欄の外に重ねる（足す欄の大きさが変わると、iPhone は入力中のカーソルを古い位置に描く） */}
+      {showPicker && (
+        <div id="section-picker" className="section-picker" role="group" aria-label="お店">
+          <div className="section-picker-inner">
             {SECTIONS.map((s) => (
               <button
                 key={s}
@@ -666,8 +667,10 @@ function Adder({
               </button>
             ))}
           </div>
-        )}
-        {focused && !showPicker && chips.length > 0 && (
+        </div>
+      )}
+      <div className="adder-inner">
+        {focused && chips.length > 0 && (
           <div className="chips" role="group" aria-label="よく買う物">
             {chips.map((h) => (
               <button
