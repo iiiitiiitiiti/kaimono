@@ -16,6 +16,7 @@ import {
   type Item,
   type Section,
 } from "./model";
+import { flushSync } from "react-dom";
 import { useKeyboardFirst } from "./keyboardFirst";
 import { useList } from "./useList";
 
@@ -234,8 +235,15 @@ function ListScreen({
   const inputRef = useRef<HTMLInputElement>(null);
   const proxyRef = useRef<HTMLInputElement>(null);
 
-  const groups = groupBySection(items);
-  const basket = checkedItems(items);
+  // お店で絞る。選んだお店は覚えない（家で開いたときに品物が隠れていると、足し忘れや二重に足す元になる）
+  const [store, setStore] = useState<Section | null>(null);
+  const stores = SECTIONS.filter((s) => items.some((i) => i.section === s));
+  // 選んだお店の品物が無くなったら（お店が1つだけになったときも）全部に戻す
+  const shown = store && stores.length > 1 && stores.includes(store) ? store : null;
+  const inShown = (i: Item) => !shown || i.section === shown;
+
+  const groups = groupBySection(items.filter(inShown));
+  const basket = checkedItems(items.filter(inShown));
   const openCount = items.filter((i) => !i.checked).length;
 
   // かごに入れるときは、行を縮めてから移す（並びが一瞬で飛ばないように）
@@ -268,6 +276,9 @@ function ListScreen({
   };
 
   const highlight = (id: string) => {
+    // 絞っていて隠れている行なら、先に全部へ戻してから光らせる
+    const target = items.find((i) => i.id === id);
+    if (target && !inShown(target)) flushSync(() => setStore(null));
     setFlash(id);
     document.getElementById(`item-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
     window.setTimeout(() => setFlash((f) => (f === id ? null : f)), 1600);
@@ -312,6 +323,25 @@ function ListScreen({
               </button>
             </div>
           )}
+          {state === "ready" && stores.length > 1 && (
+            <details className="fold filter">
+              <summary>
+                お店で絞る
+                {shown && <span className="filter-now">{shown}</span>}
+              </summary>
+              <div className="filter-chips" role="group" aria-label="お店で絞る">
+                <button className="chip" type="button" aria-pressed={!shown} onClick={() => setStore(null)}>
+                  全部
+                </button>
+                {stores.map((s) => (
+                  <button key={s} className="chip" type="button" aria-pressed={shown === s} onClick={() => setStore(s)}>
+                    {s}
+                    <span className="chip-count">{items.filter((i) => i.section === s && !i.checked).length}</span>
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
           {state === "ready" && groups.length === 0 && basket.length === 0 && <p className="empty">買う物はありません</p>}
           {state === "ready" && groups.length === 0 && basket.length > 0 && <p className="empty">全部かごに入りました</p>}
 
@@ -339,11 +369,14 @@ function ListScreen({
           ))}
 
           {basket.length > 0 && (
-            <section className="group basket" aria-labelledby="sec-basket">
-              <div className="basket-head">
-                <h2 id="sec-basket" className="sec">
+            // かごに入れた物はふだん畳んでおく
+            <details className="group basket">
+              <summary className="basket-head">
+                <h2 className="sec">
                   かごに入れた <span className="badge">{basket.length}</span>
                 </h2>
+              </summary>
+              <div className="basket-tools">
                 <button className="btn small" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
                   まとめて消す
                 </button>
@@ -363,7 +396,7 @@ function ListScreen({
                   />
                 ))}
               </ul>
-            </section>
+            </details>
           )}
         </div>
       </main>
@@ -380,11 +413,14 @@ function ListScreen({
             showToast(`「${dup.name}」はもう入っています`);
           } else {
             actions.add(name, section, note, me);
+            // 絞っているお店と違う物を足したら、足した物が見えるよう全部に戻す
+            if (shown && section !== shown) setStore(null);
           }
           return true;
         }}
         onQuickAdd={(h) => {
           const id = actions.add(h.name, h.section, "", me);
+          if (shown && h.section !== shown) setStore(null);
           showToast(`「${h.name}」を足しました`, {
             label: "取り消す",
             run: () => actions.remove([{ id } as Item]),
