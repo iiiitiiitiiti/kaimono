@@ -623,7 +623,7 @@ body:has(.app) {
   transform: rotate(45deg) translateY(-2px);
   transition: transform 0.25s var(--ease-out);
 }
-.basket[open] .basket-head::after {
+.basket[open]:not([data-closing]) .basket-head::after {
   transform: rotate(-135deg) translateY(-2px);
 }
 .basket-tools {
@@ -869,7 +869,7 @@ body:has(.app) {
   transform: rotate(45deg);
   transition: transform 0.25s var(--ease-out);
 }
-.fold[open] summary::after {
+.fold[open]:not([data-closing]) summary::after {
   transform: rotate(-135deg);
 }
 .fold > :not(summary) {

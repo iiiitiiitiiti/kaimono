@@ -2,6 +2,7 @@ import "@fontsource-variable/noto-sans-jp";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { animateDisclosures } from "./disclosure";
 import { setupPwa } from "./pwa";
 import { trackViewport } from "./viewport";
 import "./styles.css";
@@ -16,4 +17,5 @@ createRoot(root).render(
 );
 
 trackViewport();
+animateDisclosures();
 setupPwa();
