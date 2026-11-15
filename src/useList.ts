@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   deleteDoc,
@@ -13,7 +13,16 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
-import { historyId, isSection, OTHER, type HistoryEntry, type Item, type Section } from "./model";
+import {
+  historyId,
+  isSection,
+  LOG_DAYS,
+  OTHER,
+  type AddLog,
+  type HistoryEntry,
+  type Item,
+  type Section,
+} from "./model";
 
 export type LoadState = "loading" | "ready" | "denied" | "offline-timeout";
 
@@ -42,10 +51,25 @@ function toHistory(id: string, d: DocumentData): HistoryEntry {
   };
 }
 
+function toLog(id: string, d: DocumentData): AddLog {
+  return {
+    id,
+    name: String(d.name ?? ""),
+    section: isSection(d.section) ? d.section : OTHER,
+    addedBy: typeof d.addedBy === "string" ? d.addedBy : "",
+    at: toMillis(d.at),
+  };
+}
+
+/** 一度に消す古い追加履歴の上限（1回の書き込みにまとめられる数に収める） */
+const PRUNE_MAX = 400;
+
 /** 2人で共有するリストを購読し、書き込み操作を返す */
 export function useList(listKey: string, onWriteError: () => void) {
   const [items, setItems] = useState<Item[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [logs, setLogs] = useState<AddLog[]>([]);
+  const pruned = useRef(false);
   const [state, setState] = useState<LoadState>("loading");
 
   const refs = useMemo(() => {
@@ -54,6 +78,7 @@ export function useList(listKey: string, onWriteError: () => void) {
       db,
       items: collection(db, "lists", listKey, "items"),
       history: collection(db, "lists", listKey, "history"),
+      log: collection(db, "lists", listKey, "log"),
     };
   }, [listKey]);
 
@@ -84,10 +109,34 @@ export function useList(listKey: string, onWriteError: () => void) {
       (snap) => setHistory(snap.docs.map((d) => toHistory(d.id, d.data({ serverTimestamps: "estimate" })))),
       fail,
     );
+    pruned.current = false;
+    // 追加履歴が読めなくても、リストは使えるようにする（fail を通さない）
+    // 手元の写しと中身が同じだと届いた知らせが来ないので、metadata の変化も受け取る
+    const unLog = onSnapshot(
+      refs.log,
+      { includeMetadataChanges: true },
+      (snap) => {
+        setLogs(snap.docs.map((d) => toLog(d.id, d.data({ serverTimestamps: "estimate" }))));
+        // 手元の写しは古いことがあるので、保存先から届いた中身で1回だけ判定する
+        if (pruned.current || snap.metadata.fromCache) return;
+        pruned.current = true;
+        const cutoff = Date.now() - LOG_DAYS * 86400000;
+        const old = snap.docs.filter((d) => {
+          const at = d.get("at");
+          return at instanceof Timestamp && at.toMillis() < cutoff;
+        });
+        if (old.length === 0) return;
+        const batch = writeBatch(refs.db);
+        for (const d of old.slice(0, PRUNE_MAX)) batch.delete(d.ref);
+        batch.commit().catch((e: unknown) => console.error("古い追加履歴を消せませんでした", e));
+      },
+      (e) => console.error("追加履歴を読めませんでした", e),
+    );
     return () => {
       window.clearTimeout(timer);
       unItems();
       unHistory();
+      unLog();
     };
   }, [refs]);
 
@@ -122,6 +171,10 @@ export function useList(listKey: string, onWriteError: () => void) {
           { merge: true },
         );
         run(batch.commit());
+        // 品物とは別に書き、履歴が保存できなくても品物は足せるようにする
+        const log: DocumentData = { name, section, at: serverTimestamp() };
+        if (addedBy) log.addedBy = addedBy;
+        setDoc(doc(refs.log), log).catch((e: unknown) => console.error("追加履歴を残せませんでした", e));
         return ref.id;
       },
       toggle(item: Item) {
@@ -166,5 +219,5 @@ export function useList(listKey: string, onWriteError: () => void) {
     };
   }, [refs, onWriteError]);
 
-  return { items, history, state, actions };
+  return { items, history, logs, state, actions };
 }

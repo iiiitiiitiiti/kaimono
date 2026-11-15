@@ -7,12 +7,16 @@ import {
   groupBySection,
   guessSection,
   keyFromHash,
+  LOG_DAYS,
+  logByDay,
   NOTE_MAX,
   NAME_MAX,
   PERSON_MAX,
   personColor,
   SECTIONS,
   suggestions,
+  timeLabel,
+  type AddLog,
   type HistoryEntry,
   type Item,
   type Section,
@@ -197,7 +201,7 @@ function ListScreen({
     () => setError({ id: Date.now(), message: "保存できませんでした。つながってからもう一度試してください" }),
     [],
   );
-  const { items, history, state, actions } = useList(listKey, onWriteError);
+  const { items, history, logs, state, actions } = useList(listKey, onWriteError);
 
   const [editing, setEditing] = useState<Item | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -434,6 +438,7 @@ function ListScreen({
           me={me}
           onMe={onMe}
           history={history}
+          logs={logs}
           onForget={(h) => actions.forgetHistory(h)}
           onClose={() => setMenuOpen(false)}
           onToast={showToast}
@@ -868,6 +873,7 @@ function MenuDialog({
   me,
   onMe,
   history,
+  logs,
   onForget,
   onClose,
   onToast,
@@ -875,12 +881,15 @@ function MenuDialog({
   me: string;
   onMe: (v: string) => void;
   history: HistoryEntry[];
+  logs: AddLog[];
   onForget: (h: HistoryEntry) => void;
   onClose: () => void;
   onToast: (m: string) => void;
 }) {
   const [name, setName] = useState(me);
   const sorted = [...history].filter((h) => h.count > 0).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ja"));
+  const days = logByDay(logs, Date.now());
+  const logCount = days.reduce((n, d) => n + d.entries.length, 0);
 
   const share = async () => {
     const url = window.location.href;
@@ -924,6 +933,36 @@ function MenuDialog({
         <button className="btn wide" type="button" onClick={share}>
           一緒に使う人へリンクを送る
         </button>
+
+        <details className="fold">
+          <summary>追加履歴（{logCount}）</summary>
+          {days.length === 0 ? (
+            <p className="muted">まだありません。足した物がここに残ります</p>
+          ) : (
+            <div className="log">
+              {days.map((day) => (
+                <section key={day.label}>
+                  <h3 className="log-day">{day.label}</h3>
+                  <ul>
+                    {day.entries.map((l) => (
+                      <li key={l.id}>
+                        <span className="muted small log-time">{timeLabel(l.at)}</span>
+                        <span className="log-body">
+                          <span className="log-name">{l.name}</span>
+                          <span className="log-meta">
+                            <span className="muted small">{l.section}</span>
+                            {l.addedBy && <span className={`who who-${personColor(l.addedBy)}`}>{l.addedBy}</span>}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+              <p className="muted small">{LOG_DAYS}日より前の分は消えます</p>
+            </div>
+          )}
+        </details>
 
         <details className="fold">
           <summary>ホーム画面に置くには</summary>

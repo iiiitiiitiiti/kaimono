@@ -40,6 +40,17 @@ export interface HistoryEntry {
   lastAt: number;
 }
 
+export interface AddLog {
+  id: string;
+  name: string;
+  section: Section;
+  addedBy: string;
+  at: number; // ミリ秒
+}
+
+/** 追加履歴を残す日数。これより古い記録は開いたときに消す */
+export const LOG_DAYS = 90;
+
 export const NAME_MAX = 60;
 export const NOTE_MAX = 100;
 export const PERSON_MAX = 20;
@@ -154,4 +165,47 @@ export function personColor(name: string): number {
 export function keyFromHash(hash: string): string | null {
   const m = /(?:^#|&)k=([0-9a-f]{32})(?:&|$)/.exec(hash);
   return m ? m[1] : null;
+}
+
+export interface LogDay {
+  label: string;
+  entries: AddLog[];
+}
+
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+function startOfDay(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function dayLabel(ms: number, now: number): string {
+  const day = startOfDay(ms);
+  const today = startOfDay(now);
+  if (day === today) return "今日";
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (day === yesterday.getTime()) return "昨日";
+  const d = new Date(ms);
+  const md = `${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+  return d.getFullYear() === new Date(now).getFullYear() ? md : `${d.getFullYear()}年${md}`;
+}
+
+export function timeLabel(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** 追加履歴を新しい順に並べ、日ごとにまとめる。残す日数より古い物は除く */
+export function logByDay(logs: AddLog[], now: number): LogDay[] {
+  const cutoff = now - LOG_DAYS * 86400000;
+  const days: LogDay[] = [];
+  for (const log of [...logs].filter((l) => l.at >= cutoff).sort((a, b) => b.at - a.at)) {
+    const label = dayLabel(log.at, now);
+    const last = days[days.length - 1];
+    if (last && last.label === label) last.entries.push(log);
+    else days.push({ label, entries: [log] });
+  }
+  return days;
 }

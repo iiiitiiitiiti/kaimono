@@ -39,6 +39,15 @@ service cloud.firestore {
         && d.lastAt is timestamp;
     }
 
+    function validLog(d) {
+      return d.keys().hasAll(["name", "section", "at"])
+        && d.keys().hasOnly(["name", "section", "addedBy", "at"])
+        && shortString(d.name, 1, 60)
+        && validSection(d.section)
+        && (!("addedBy" in d) || shortString(d.addedBy, 0, 20))
+        && d.at is timestamp;
+    }
+
     match /lists/{key}/items/{itemId} {
       allow read, delete: if isOurList(key);
       allow create, update: if isOurList(key) && validItem(request.resource.data);
@@ -47,6 +56,11 @@ service cloud.firestore {
     match /lists/{key}/history/{hid} {
       allow read, delete: if isOurList(key);
       allow create, update: if isOurList(key) && validHistory(request.resource.data);
+    }
+
+    match /lists/{key}/log/{logId} {
+      allow read, delete: if isOurList(key);
+      allow create: if isOurList(key) && validLog(request.resource.data);
     }
   }
 }

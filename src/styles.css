@@ -924,6 +924,56 @@ body:has(.app) {
 .history li > span:first-child {
   flex: 1;
 }
+.log {
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+.log ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.log-day {
+  margin: 10px 0 2px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.log li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.log-time {
+  min-width: 2.8em;
+  font-variant-numeric: tabular-nums;
+}
+.log-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 2px;
+}
+.log-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.log-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.log .who {
+  margin-right: 0;
+}
 
 /* ---------- トースト ---------- */
 

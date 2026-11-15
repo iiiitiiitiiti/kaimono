@@ -3,13 +3,18 @@ import {
   checkedBySection,
   checkedItems,
   cleanName,
+  dayLabel,
   findOpenDuplicate,
   groupBySection,
   guessSection,
   historyId,
   keyFromHash,
+  LOG_DAYS,
+  logByDay,
   nameKey,
   suggestions,
+  timeLabel,
+  type AddLog,
   type HistoryEntry,
   type Item,
 } from "../src/model";
@@ -164,5 +169,41 @@ describe("keyFromHash", () => {
     expect(keyFromHash("#k=short")).toBeNull();
     expect(keyFromHash("")).toBeNull();
     expect(keyFromHash(`#k=${k}zz`)).toBeNull();
+  });
+});
+
+describe("追加履歴", () => {
+  const at = (y: number, mo: number, d: number, h = 12, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
+  const now = at(2026, 11, 15, 18);
+  const log = (id: string, ms: number): AddLog => ({ id, name: id, section: "スーパー", addedBy: "", at: ms });
+
+  it("日付の見出しは今日・昨日・月日（曜日）、年が違えば年も付ける", () => {
+    expect(dayLabel(at(2026, 11, 15, 0, 1), now)).toBe("今日");
+    expect(dayLabel(at(2026, 11, 14, 23, 59), now)).toBe("昨日");
+    expect(dayLabel(at(2026, 11, 13), now)).toBe("11月13日（金）");
+    expect(dayLabel(at(2025, 12, 31), now)).toBe("2025年12月31日（水）");
+  });
+
+  it("時刻は 時:分 で分を2桁にする", () => {
+    expect(timeLabel(at(2026, 11, 15, 9, 5))).toBe("9:05");
+  });
+
+  it("新しい順に日ごとへまとめ、残す日数より古い物は除く", () => {
+    const days = logByDay(
+      [
+        log("a", at(2026, 11, 14, 9)),
+        log("b", at(2026, 11, 15, 8)),
+        log("c", at(2026, 11, 15, 17)),
+        log("old", now - (LOG_DAYS + 1) * 86400000),
+      ],
+      now,
+    );
+    expect(days.map((d) => d.label)).toEqual(["今日", "昨日"]);
+    expect(days[0].entries.map((l) => l.id)).toEqual(["c", "b"]);
+    expect(days[1].entries.map((l) => l.id)).toEqual(["a"]);
+  });
+
+  it("記録が無ければ空", () => {
+    expect(logByDay([], now)).toEqual([]);
   });
 });
