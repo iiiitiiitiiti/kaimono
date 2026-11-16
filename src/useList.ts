@@ -15,9 +15,11 @@ import {
 import { getDb } from "./firebase";
 import {
   historyId,
+  isCustomStore,
   isSection,
   LOG_DAYS,
   OTHER,
+  storeId,
   type AddLog,
   type HistoryEntry,
   type Item,
@@ -55,7 +57,8 @@ function toLog(id: string, d: DocumentData): AddLog {
   return {
     id,
     name: String(d.name ?? ""),
-    section: isSection(d.section) ? d.section : OTHER,
+    // 追加履歴は記録なので、消したお店の名前もそのまま出す
+    section: typeof d.section === "string" && d.section ? d.section : OTHER,
     addedBy: typeof d.addedBy === "string" ? d.addedBy : "",
     at: toMillis(d.at),
   };
@@ -69,6 +72,8 @@ export function useList(listKey: string, onWriteError: () => void) {
   const [items, setItems] = useState<Item[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logs, setLogs] = useState<AddLog[]>([]);
+  const [stores, setStores] = useState<Section[]>([]);
+  const storesRef = useRef<Section[]>([]);
   const pruned = useRef(false);
   const [state, setState] = useState<LoadState>("loading");
 
@@ -79,6 +84,7 @@ export function useList(listKey: string, onWriteError: () => void) {
       items: collection(db, "lists", listKey, "items"),
       history: collection(db, "lists", listKey, "history"),
       log: collection(db, "lists", listKey, "log"),
+      stores: collection(db, "lists", listKey, "stores"),
     };
   }, [listKey]);
 
@@ -132,11 +138,22 @@ export function useList(listKey: string, onWriteError: () => void) {
       },
       (e) => console.error("追加履歴を読めませんでした", e),
     );
+    // 自分で入れたお店。読めなくてもリストは使えるようにする（固定の10種は選べる）
+    const unStores = onSnapshot(
+      refs.stores,
+      (snap) => {
+        const names = snap.docs.map((d) => d.get("name")).filter((n): n is Section => isSection(n) && isCustomStore(n));
+        storesRef.current = names;
+        setStores(names);
+      },
+      (e) => console.error("自分で入れたお店を読めませんでした", e),
+    );
     return () => {
       window.clearTimeout(timer);
       unItems();
       unHistory();
       unLog();
+      unStores();
     };
   }, [refs]);
 
@@ -147,6 +164,14 @@ export function useList(listKey: string, onWriteError: () => void) {
         console.error("書き込みに失敗しました", e);
         onWriteError();
       });
+    };
+
+    // 自分で入れたお店を一覧に残す。品物とは別に書き、保存できなくても品物は足せるようにする
+    const saveStore = (section: Section) => {
+      if (!isCustomStore(section) || storesRef.current.includes(section)) return;
+      setDoc(doc(refs.stores, storeId(section)), { name: section }).catch((e: unknown) =>
+        console.error("お店を保存できませんでした", e),
+      );
     };
 
     const touchHistory = (name: string, section: Section, add: number) =>
@@ -171,6 +196,7 @@ export function useList(listKey: string, onWriteError: () => void) {
           { merge: true },
         );
         run(batch.commit());
+        saveStore(section);
         // 品物とは別に書き、履歴が保存できなくても品物は足せるようにする
         const log: DocumentData = { name, section, at: serverTimestamp() };
         if (addedBy) log.addedBy = addedBy;
@@ -190,6 +216,7 @@ export function useList(listKey: string, onWriteError: () => void) {
         run(updateDoc(doc(refs.items, item.id), data));
         // 売り場を直したら次からその売り場で出す
         run(touchHistory(next.name, next.section, 0));
+        saveStore(next.section);
       },
       remove(itemsToRemove: Item[]) {
         const batch = writeBatch(refs.db);
@@ -216,8 +243,19 @@ export function useList(listKey: string, onWriteError: () => void) {
       forgetHistory(entry: HistoryEntry) {
         run(deleteDoc(doc(refs.history, entry.id)));
       },
+      /**
+       * 自分で入れたお店を消す。そのお店の品物とよく買う物は「その他」へ移す
+       * （移さないと、同じ名前を入れ直したときに古い品物がそのお店へ戻る）
+       */
+      removeStore(name: Section, currentItems: Item[], currentHistory: HistoryEntry[]) {
+        const batch = writeBatch(refs.db);
+        batch.delete(doc(refs.stores, storeId(name)));
+        for (const i of currentItems) if (i.section === name) batch.update(doc(refs.items, i.id), { section: OTHER });
+        for (const h of currentHistory) if (h.section === name) batch.update(doc(refs.history, h.id), { section: OTHER });
+        run(batch.commit());
+      },
     };
   }, [refs, onWriteError]);
 
-  return { items, history, logs, state, actions };
+  return { items, history, logs, stores, state, actions };
 }

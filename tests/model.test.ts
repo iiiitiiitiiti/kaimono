@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  allStores,
   checkedBySection,
+  cleanStore,
+  customStores,
+  sortStores,
   checkedItems,
   cleanName,
   dayLabel,
@@ -127,6 +131,36 @@ describe("checkedBySection", () => {
     ]);
     expect(g.map((x) => x.section)).toEqual(["スーパー", "ドラッグストア"]);
     expect(g[0].items.map((i) => i.name)).toEqual(["c", "b"]);
+  });
+});
+
+describe("自分で入れたお店", () => {
+  it("固定のお店 → 自分のお店（五十音）→ その他 の順に並べる", () => {
+    expect(sortStores(["その他", "業務スーパー", "ドラッグストア", "イケア", "スーパー", "ドラッグストア"])).toEqual([
+      "スーパー",
+      "ドラッグストア",
+      "イケア",
+      "業務スーパー",
+      "その他",
+    ]);
+  });
+  it("選べるお店は固定の10種に、保存したお店と品物に出てくるお店を足す", () => {
+    const all = allStores(["業務スーパー"], [item({ section: "ニトリ" })]);
+    expect(all).toHaveLength(12);
+    expect(all.at(-1)).toBe("その他");
+    expect(customStores(["業務スーパー"], [item({ section: "ニトリ" }), item({ section: "スーパー" })])).toEqual(["ニトリ", "業務スーパー"]);
+  });
+  it("名前を整え、表記ゆれは既にあるお店にまとめる", () => {
+    const existing = ["スーパー", "業務スーパー"];
+    expect(cleanStore("  ｷﾞｮｳﾑ  ", existing)).toBe("ギョウム");
+    expect(cleanStore("すーぱー", existing)).toBe("スーパー");
+    expect(cleanStore("業務すーぱー", existing)).toBe("業務スーパー");
+    expect(cleanStore("   ", existing)).toBeNull();
+    expect(cleanStore("あ".repeat(30), existing)).toHaveLength(20);
+  });
+  it("自分のお店の品物もお店ごとにまとめる", () => {
+    const g = groupBySection([item({ name: "a", section: "その他" }), item({ name: "b", section: "業務スーパー" }), item({ name: "c", section: "スーパー" })]);
+    expect(g.map((x) => x.section)).toEqual(["スーパー", "業務スーパー", "その他"]);
   });
 });
 

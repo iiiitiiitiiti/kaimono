@@ -13,10 +13,13 @@ service cloud.firestore {
       return v is string && v.size() >= min && v.size() <= max;
     }
 
-    // src/model.ts の SECTIONS と揃える
+    // お店の名前。固定の10種のほか、自分で入れたお店も入るので長さだけを見る（src/model.ts の STORE_MAX と揃える）
     function validSection(v) {
-      return v in ["スーパー", "ドラッグストア", "コンビニ", "100円ショップ", "ホームセンター",
-                   "家電量販店", "服屋", "本屋", "ネット通販", "その他"];
+      return shortString(v, 1, 20);
+    }
+
+    function validStore(d) {
+      return d.keys().hasAll(["name"]) && d.keys().hasOnly(["name"]) && validSection(d.name);
     }
 
     function validItem(d) {
@@ -56,6 +59,12 @@ service cloud.firestore {
     match /lists/{key}/history/{hid} {
       allow read, delete: if isOurList(key);
       allow create, update: if isOurList(key) && validHistory(request.resource.data);
+    }
+
+    // 自分で入れたお店（1店1文書）
+    match /lists/{key}/stores/{storeId} {
+      allow read, delete: if isOurList(key);
+      allow create, update: if isOurList(key) && validStore(request.resource.data);
     }
 
     match /lists/{key}/log/{logId} {

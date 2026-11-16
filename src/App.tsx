@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  allStores,
   checkedBySection,
   checkedItems,
   cleanName,
+  cleanStore,
+  customStores,
   findOpenDuplicate,
   groupBySection,
   guessSection,
@@ -14,6 +17,8 @@ import {
   PERSON_MAX,
   personColor,
   SECTIONS,
+  sortStores,
+  STORE_MAX,
   suggestions,
   timeLabel,
   type AddLog,
@@ -24,6 +29,12 @@ import {
 import { flushSync } from "react-dom";
 import { useKeyboardFirst } from "./keyboardFirst";
 import { useList } from "./useList";
+
+/** お店の見出しの印の色。自分で入れたお店はどれも同じ色 */
+function storeClass(s: Section): string {
+  const i = (SECTIONS as readonly string[]).indexOf(s);
+  return i >= 0 ? `sec-${i}` : "sec-custom";
+}
 
 const STORE_KEY = "kaimono:key";
 const STORE_ME = "kaimono:me";
@@ -201,7 +212,8 @@ function ListScreen({
     () => setError({ id: Date.now(), message: "保存できませんでした。つながってからもう一度試してください" }),
     [],
   );
-  const { items, history, logs, state, actions } = useList(listKey, onWriteError);
+  const { items, history, logs, stores: savedStores, state, actions } = useList(listKey, onWriteError);
+  const storeChoices = allStores(savedStores, items);
 
   const [editing, setEditing] = useState<Item | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -223,7 +235,7 @@ function ListScreen({
 
   // お店で絞る。選んだお店は覚えない（家で開いたときに品物が隠れていると、足し忘れや二重に足す元になる）
   const [store, setStore] = useState<Section | null>(null);
-  const stores = SECTIONS.filter((s) => items.some((i) => i.section === s));
+  const stores = sortStores(items.map((i) => i.section));
   // 選んだお店の品物が無くなったら（お店が1つだけになったときも）全部に戻す
   const shown = store && stores.length > 1 && stores.includes(store) ? store : null;
   const inShown = (i: Item) => !shown || i.section === shown;
@@ -329,9 +341,9 @@ function ListScreen({
           {state === "ready" && groups.length === 0 && basket.length === 0 && <p className="empty">買う物はありません</p>}
           {state === "ready" && groups.length === 0 && basket.length > 0 && <p className="empty">全部買いました</p>}
 
-          {groups.map((g) => (
-            <section key={g.section} className="group" aria-labelledby={`sec-${g.section}`}>
-              <h2 id={`sec-${g.section}`} className={`sec sec-${SECTIONS.indexOf(g.section)}`}>
+          {groups.map((g, gi) => (
+            <section key={g.section} className="group" aria-labelledby={`sec-h-${gi}`}>
+              <h2 id={`sec-h-${gi}`} className={`sec ${storeClass(g.section)}`}>
                 {g.section}
               </h2>
               <ul className="items">
@@ -363,9 +375,9 @@ function ListScreen({
               <button className="basket-clear" type="button" onClick={() => removeWithUndo(basket, `${basket.length}品をリストから消しました`)}>
                 まとめて消す
               </button>
-              {basketGroups.map((g) => (
-                <section key={g.section} className="basket-group" aria-labelledby={`done-${g.section}`}>
-                  <h3 id={`done-${g.section}`} className="sec">
+              {basketGroups.map((g, gi) => (
+                <section key={g.section} className="basket-group" aria-labelledby={`done-h-${gi}`}>
+                  <h3 id={`done-h-${gi}`} className="sec">
                     {g.section}
                   </h3>
                   <ul className="items">
@@ -395,6 +407,7 @@ function ListScreen({
         proxyRef={proxyRef}
         items={items}
         history={history}
+        stores={storeChoices}
         onAdd={(name, section, note) => {
           const dup = findOpenDuplicate(items, name);
           if (dup) {
@@ -420,6 +433,7 @@ function ListScreen({
       {editing && (
         <EditDialog
           item={items.find((i) => i.id === editing.id) ?? editing}
+          stores={storeChoices}
           onClose={() => setEditing(null)}
           onSave={(next) => {
             actions.edit(editing, next);
@@ -439,7 +453,13 @@ function ListScreen({
           onMe={onMe}
           history={history}
           logs={logs}
+          items={items}
+          customStores={customStores(savedStores, items)}
           onForget={(h) => actions.forgetHistory(h)}
+          onRemoveStore={(name) => {
+            actions.removeStore(name, items, history);
+            showToast(`「${name}」を消しました`);
+          }}
           onClose={() => setMenuOpen(false)}
           onToast={showToast}
         />
@@ -607,6 +627,7 @@ function Adder({
   proxyRef,
   items,
   history,
+  stores,
   onAdd,
   onQuickAdd,
 }: {
@@ -614,6 +635,7 @@ function Adder({
   proxyRef: React.RefObject<HTMLInputElement | null>;
   items: Item[];
   history: HistoryEntry[];
+  stores: Section[];
   onAdd: (name: string, section: Section, note: string) => boolean;
   onQuickAdd: (h: HistoryEntry) => void;
 }) {
@@ -622,6 +644,10 @@ function Adder({
   const [picked, setPicked] = useState<Section | null>(null);
   const [focused, setFocused] = useState(false);
   const [picking, setPicking] = useState(false);
+  // 「ほかのお店」を押したら、お店の名前を打つ欄を出す
+  const [typingStore, setTypingStore] = useState(false);
+  const [storeDraft, setStoreDraft] = useState("");
+  const storeInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   // お店を選んだあと、さっきまで打っていた欄へ戻す
   const lastFieldRef = useRef<HTMLInputElement | null>(null);
@@ -631,10 +657,24 @@ function Adder({
   const section = picked ?? (cleaned ? guessSection(cleaned, history) : "その他");
   const chips = suggestions(history, items, name);
   const showPicker = picking && focused && !!cleaned;
+  // 打ちかけのお店の名前があれば、それで足す
+  const draftStore = typingStore ? cleanStore(storeDraft, stores) : null;
+  const chosen = draftStore ?? section;
+  const pickerStores = sortStores([...stores, section]);
 
   // お店のボタンを押しても入力欄からフォーカスを外さない（キーボードを閉じさせない）
   const keepFocus = (e: React.PointerEvent | React.MouseEvent) => {
-    if (lastFieldRef.current && document.activeElement === lastFieldRef.current) e.preventDefault();
+    const a = document.activeElement;
+    if (a instanceof HTMLInputElement && formRef.current?.contains(a)) e.preventDefault();
+  };
+  const closeStoreInput = () => {
+    setTypingStore(false);
+    setStoreDraft("");
+  };
+  const confirmStore = () => {
+    if (draftStore) setPicked(draftStore);
+    closeStoreInput();
+    backToField();
   };
   const backToField = () => {
     const f = lastFieldRef.current;
@@ -644,11 +684,12 @@ function Adder({
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!cleaned) return;
-    if (onAdd(cleaned, section, note.normalize("NFKC").trim().slice(0, NOTE_MAX))) {
+    if (onAdd(cleaned, chosen, note.normalize("NFKC").trim().slice(0, NOTE_MAX))) {
       setName("");
       setNote("");
       setPicked(null);
       setPicking(false);
+      closeStoreInput();
     }
     inputRef.current?.focus();
   };
@@ -660,12 +701,14 @@ function Adder({
       onSubmit={submit}
       onFocus={(e) => {
         setFocused(true);
-        if (e.target instanceof HTMLInputElement) lastFieldRef.current = e.target;
+        // お店の名前を打つ欄は戻り先にしない（決めたら品名か数量の欄へ戻る）
+        if (e.target instanceof HTMLInputElement && e.target !== storeInputRef.current) lastFieldRef.current = e.target;
       }}
       onBlur={(e) => {
         if (!formRef.current?.contains(e.relatedTarget as Node)) {
           setFocused(false);
           setPicking(false);
+          closeStoreInput();
         }
       }}
       onKeyDown={(e) => {
@@ -676,23 +719,64 @@ function Adder({
       {showPicker && (
         <div id="section-picker" className="section-picker" role="group" aria-label="お店">
           <div className="section-picker-inner">
-            {SECTIONS.map((s) => (
+            {pickerStores.map((s) => (
               <button
                 key={s}
                 type="button"
                 className="chip"
-                aria-pressed={s === section}
+                aria-pressed={!draftStore && s === section}
                 onPointerDown={keepFocus}
                 onMouseDown={keepFocus}
                 onClick={() => {
                   // 選んでも一覧は閉じない（選び直しやすくする。閉じるのはお店のボタンか、足したとき）
                   setPicked(s);
+                  closeStoreInput();
                   backToField();
                 }}
               >
                 {s}
               </button>
             ))}
+            {typingStore ? (
+              <div className="store-input">
+                <label htmlFor="new-store" className="sr-only">
+                  お店の名前
+                </label>
+                <input
+                  id="new-store"
+                  ref={storeInputRef}
+                  value={storeDraft}
+                  maxLength={STORE_MAX}
+                  onChange={(e) => setStoreDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Enter は品物を足さず、お店を決めるだけにする
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      confirmStore();
+                    }
+                  }}
+                  placeholder="お店の名前"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                />
+                <button className="chip" type="button" disabled={!draftStore} onPointerDown={keepFocus} onMouseDown={keepFocus} onClick={confirmStore}>
+                  決める
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="chip chip-add"
+                onPointerDown={keepFocus}
+                onMouseDown={keepFocus}
+                onClick={() => {
+                  flushSync(() => setTypingStore(true));
+                  storeInputRef.current?.focus({ preventScroll: true });
+                }}
+              >
+                ＋ ほかのお店
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -747,7 +831,7 @@ function Adder({
             <button
               type="button"
               className="section-btn"
-              aria-label={`お店: ${section}`}
+              aria-label={`お店: ${chosen}`}
               aria-expanded={showPicker}
               aria-controls="section-picker"
               onPointerDown={keepFocus}
@@ -757,7 +841,7 @@ function Adder({
                 backToField();
               }}
             >
-              <span>{section}</span>
+              <span>{chosen}</span>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d={showPicker ? "M7 14l5-5 5 5" : "M7 10l5 5 5-5"} />
               </svg>
@@ -813,28 +897,38 @@ function Dialog({ title, onClose, children }: { title: string; onClose: () => vo
   );
 }
 
+/** 直す画面の選択肢で「ほかのお店」を表す値（お店の名前に使えない長さにして重ならないようにする） */
+const NEW_STORE = "\u0000".repeat(STORE_MAX + 1);
+
 function EditDialog({
   item,
+  stores,
   onClose,
   onSave,
   onDelete,
 }: {
   item: Item;
+  stores: Section[];
   onClose: () => void;
   onSave: (next: { name: string; section: Section; note: string }) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(item.name);
   const [section, setSection] = useState<Section>(item.section);
+  // 「ほかのお店」を選んだら、お店の名前を打つ欄を出す
+  const [typingStore, setTypingStore] = useState(false);
+  const [storeDraft, setStoreDraft] = useState("");
   const [note, setNote] = useState(item.note);
   const cleaned = cleanName(name);
+  const draftStore = cleanStore(storeDraft, stores);
+  const chosen = typingStore ? draftStore : section;
   return (
     <Dialog title="直す" onClose={onClose}>
       <form
         className="fields"
         onSubmit={(e) => {
           e.preventDefault();
-          if (cleaned) onSave({ name: cleaned, section, note: note.normalize("NFKC").trim().slice(0, NOTE_MAX) });
+          if (cleaned && chosen) onSave({ name: cleaned, section: chosen, note: note.normalize("NFKC").trim().slice(0, NOTE_MAX) });
         }}
       >
         <label>
@@ -843,14 +937,31 @@ function EditDialog({
         </label>
         <label>
           <span>お店</span>
-          <select value={section} onChange={(e) => setSection(e.target.value as Section)}>
-            {SECTIONS.map((s) => (
+          <select
+            value={typingStore ? NEW_STORE : section}
+            onChange={(e) => {
+              if (e.target.value === NEW_STORE) {
+                setTypingStore(true);
+              } else {
+                setTypingStore(false);
+                setSection(e.target.value);
+              }
+            }}
+          >
+            {stores.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
+            <option value={NEW_STORE}>＋ ほかのお店</option>
           </select>
         </label>
+        {typingStore && (
+          <label>
+            <span>お店の名前</span>
+            <input value={storeDraft} maxLength={STORE_MAX} onChange={(e) => setStoreDraft(e.target.value)} autoComplete="off" autoFocus />
+          </label>
+        )}
         <label>
           <span>数量・メモ</span>
           <input value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} autoComplete="off" />
@@ -860,7 +971,7 @@ function EditDialog({
           <button className="btn danger" type="button" onClick={onDelete}>
             消す
           </button>
-          <button className="btn primary" type="submit" disabled={!cleaned}>
+          <button className="btn primary" type="submit" disabled={!cleaned || !chosen}>
             保存
           </button>
         </div>
@@ -874,7 +985,10 @@ function MenuDialog({
   onMe,
   history,
   logs,
+  items,
+  customStores,
   onForget,
+  onRemoveStore,
   onClose,
   onToast,
 }: {
@@ -882,7 +996,10 @@ function MenuDialog({
   onMe: (v: string) => void;
   history: HistoryEntry[];
   logs: AddLog[];
+  items: Item[];
+  customStores: Section[];
   onForget: (h: HistoryEntry) => void;
+  onRemoveStore: (name: Section) => void;
   onClose: () => void;
   onToast: (m: string) => void;
 }) {
@@ -972,6 +1089,39 @@ function MenuDialog({
             <li>「ホーム画面に追加」を選ぶ</li>
           </ol>
         </details>
+
+        {customStores.length > 0 && (
+          <details className="fold">
+            <summary>お店の整理（{customStores.length}）</summary>
+            <ul className="history">
+              {customStores.map((s) => {
+                const n = items.filter((i) => i.section === s).length;
+                return (
+                  <li key={s}>
+                    <span>{s}</span>
+                    {n > 0 && <span className="muted small">{n}品</span>}
+                    <button
+                      className="btn small"
+                      type="button"
+                      onClick={(e) => {
+                        // 消した行のボタンが無くなっても、次の行（無ければ見出し）へ移る
+                        const li = e.currentTarget.closest("li");
+                        const next = (li?.nextElementSibling ?? li?.previousElementSibling)?.querySelector("button");
+                        const summary = e.currentTarget.closest("details")?.querySelector("summary");
+                        onRemoveStore(s);
+                        window.setTimeout(() => (next && document.contains(next) ? next : summary)?.focus(), 0);
+                      }}
+                      aria-label={`${s}を消す`}
+                    >
+                      消す
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="muted small">消したお店の品物は「その他」へ移ります</p>
+          </details>
+        )}
 
         <details className="fold">
           <summary>よく買う物の整理（{sorted.length}）</summary>

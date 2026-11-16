@@ -14,11 +14,58 @@ export const SECTIONS = [
   "その他",
 ] as const;
 
-export type Section = (typeof SECTIONS)[number];
+/** お店の名前。固定の10種のほか、2人が自分で入れたお店（例: 業務スーパー）も入る */
+export type Section = string;
 export const OTHER: Section = "その他";
+/** 自分で入れるお店の名前の長さの上限（firestore.rules の validSection と揃える） */
+export const STORE_MAX = 20;
 
+const FIXED: readonly string[] = SECTIONS;
+
+/** 保存先から届いた値がお店の名前として使えるか */
 export function isSection(v: unknown): v is Section {
-  return typeof v === "string" && (SECTIONS as readonly string[]).includes(v);
+  return typeof v === "string" && v.length >= 1 && v.length <= STORE_MAX;
+}
+
+export function isCustomStore(s: Section): boolean {
+  return !FIXED.includes(s);
+}
+
+/** お店を並べる順。固定のお店（その他を除く）→ 自分で入れたお店（五十音）→ その他 */
+export function sortStores(stores: Iterable<Section>): Section[] {
+  const rank = (s: Section) => (s === OTHER ? 2 : FIXED.includes(s) ? 0 : 1);
+  return [...new Set(stores)].sort(
+    (a, b) => rank(a) - rank(b) || (rank(a) === 0 ? FIXED.indexOf(a) - FIXED.indexOf(b) : a.localeCompare(b, "ja")),
+  );
+}
+
+/**
+ * 選べるお店。固定の10種に、保存した自分のお店を足す。
+ * 一覧に無いお店の品物（相手が消したのと行き違いで足した物など）も、そのお店の名前のまま出す
+ */
+export function allStores(saved: readonly Section[], items: Item[]): Section[] {
+  return sortStores([...FIXED, ...saved, ...items.map((i) => i.section)]);
+}
+
+/** 自分で入れたお店（メニューで消せる物） */
+export function customStores(saved: readonly Section[], items: Item[]): Section[] {
+  return allStores(saved, items).filter(isCustomStore);
+}
+
+/** 自分で入れたお店の文書 ID。表記ゆれを同じお店にまとめる */
+export function storeId(name: Section): string {
+  return historyId(name);
+}
+
+/**
+ * 入力されたお店の名前を整える。空なら null。
+ * 既にあるお店と表記ゆれだけの違い（全角半角・カタカナひらがななど）なら、既にある方の名前を返す
+ */
+export function cleanStore(raw: string, existing: readonly Section[]): Section | null {
+  const s = raw.normalize("NFKC").replace(/\s+/g, " ").trim().slice(0, STORE_MAX);
+  if (!s) return null;
+  const key = nameKey(s);
+  return existing.find((e) => nameKey(e) === key) ?? s;
 }
 
 export interface Item {
@@ -108,10 +155,10 @@ export interface SectionGroup {
 /** まだ買っていない物を売り場の順にまとめる。売り場の中は足した順 */
 export function groupBySection(items: Item[]): SectionGroup[] {
   const open = items.filter((i) => !i.checked);
-  return SECTIONS.map((section) => ({
+  return sortStores(open.map((i) => i.section)).map((section) => ({
     section,
     items: open.filter((i) => i.section === section).sort((a, b) => a.createdAt - b.createdAt),
-  })).filter((g) => g.items.length > 0);
+  }));
 }
 
 /** 買った（チェックした）物。チェックしたのが新しい順 */
@@ -124,9 +171,10 @@ export function checkedItems(items: Item[]): Item[] {
 /** 買った物を売り場の順にまとめる。売り場の中はチェックしたのが新しい順 */
 export function checkedBySection(items: Item[]): SectionGroup[] {
   const checked = checkedItems(items);
-  return SECTIONS.map((section) => ({ section, items: checked.filter((i) => i.section === section) })).filter(
-    (g) => g.items.length > 0,
-  );
+  return sortStores(checked.map((i) => i.section)).map((section) => ({
+    section,
+    items: checked.filter((i) => i.section === section),
+  }));
 }
 
 /** よく買う物の候補。リストに載っている（未チェックの）物は除き、入力があれば絞り込む */
