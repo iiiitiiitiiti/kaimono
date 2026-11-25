@@ -51,6 +51,13 @@ service cloud.firestore {
         && d.at is timestamp;
     }
 
+    // 足した物を知らせる Discord のウェブフック URL（src/model.ts の WEBHOOK_PATTERN と揃える）
+    function validNotify(d) {
+      return d.keys().hasAll(["discord"]) && d.keys().hasOnly(["discord"])
+        && shortString(d.discord, 1, 200)
+        && d.discord.matches("^https://((ptb|canary)[.])?discord(app)?[.]com/api/webhooks/[0-9]{1,25}/[A-Za-z0-9_-]{1,100}$");
+    }
+
     match /lists/{key}/items/{itemId} {
       allow read, delete: if isOurList(key);
       allow create, update: if isOurList(key) && validItem(request.resource.data);
@@ -65,6 +72,12 @@ service cloud.firestore {
     match /lists/{key}/stores/{storeId} {
       allow read, delete: if isOurList(key);
       allow create, update: if isOurList(key) && validStore(request.resource.data);
+    }
+
+    // 知らせの設定（今は notify の1件だけ）
+    match /lists/{key}/settings/{name} {
+      allow read, delete: if isOurList(key);
+      allow create, update: if isOurList(key) && name == "notify" && validNotify(request.resource.data);
     }
 
     match /lists/{key}/log/{logId} {

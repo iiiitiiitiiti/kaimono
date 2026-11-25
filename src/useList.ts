@@ -14,6 +14,8 @@ import {
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import {
+  addedMessage,
+  cleanWebhook,
   historyId,
   isCustomStore,
   isSection,
@@ -64,6 +66,23 @@ function toLog(id: string, d: DocumentData): AddLog {
   };
 }
 
+/** Discord へ送る。送れたら true。届かなかった理由はコンソールにだけ出す */
+async function postDiscord(url: string, content: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // 品名に @everyone などが入っても、だれも呼び出さない
+      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+    });
+    if (!res.ok) console.error("Discord に送れませんでした", res.status);
+    return res.ok;
+  } catch (e) {
+    console.error("Discord に送れませんでした", e);
+    return false;
+  }
+}
+
 /** 一度に消す古い追加履歴の上限（1回の書き込みにまとめられる数に収める） */
 const PRUNE_MAX = 400;
 
@@ -74,6 +93,11 @@ export function useList(listKey: string, onWriteError: () => void) {
   const [logs, setLogs] = useState<AddLog[]>([]);
   const [stores, setStores] = useState<Section[]>([]);
   const storesRef = useRef<Section[]>([]);
+  // Discord のウェブフック URL（2人で共有）。無ければ知らせない
+  const [webhook, setWebhookState] = useState<string | null>(null);
+  const webhookRef = useRef<string | null>(null);
+  // 電波が無くて送れなかった知らせ。つながったら送り直す（アプリを閉じると消える）
+  const pendingNotes = useRef<string[]>([]);
   const pruned = useRef(false);
   const [state, setState] = useState<LoadState>("loading");
 
@@ -85,6 +109,7 @@ export function useList(listKey: string, onWriteError: () => void) {
       history: collection(db, "lists", listKey, "history"),
       log: collection(db, "lists", listKey, "log"),
       stores: collection(db, "lists", listKey, "stores"),
+      notify: doc(db, "lists", listKey, "settings", "notify"),
     };
   }, [listKey]);
 
@@ -148,14 +173,37 @@ export function useList(listKey: string, onWriteError: () => void) {
       },
       (e) => console.error("自分で入れたお店を読めませんでした", e),
     );
+    // 知らせの設定。読めなくてもリストは使えるようにする
+    const unNotify = onSnapshot(
+      refs.notify,
+      (snap) => {
+        const raw = snap.get("discord");
+        const url = typeof raw === "string" ? cleanWebhook(raw) : null;
+        webhookRef.current = url;
+        setWebhookState(url);
+      },
+      (e) => console.error("知らせの設定を読めませんでした", e),
+    );
     return () => {
       window.clearTimeout(timer);
+      unNotify();
       unItems();
       unHistory();
       unLog();
       unStores();
     };
   }, [refs]);
+
+  useEffect(() => {
+    const flush = () => {
+      const url = webhookRef.current;
+      const notes = pendingNotes.current.splice(0);
+      if (!url) return;
+      for (const n of notes) void postDiscord(url, n);
+    };
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
 
   const actions = useMemo(() => {
     // 書き込みは待たない（電波が無くても画面にはすぐ出し、つながったら送られる）
@@ -172,6 +220,17 @@ export function useList(listKey: string, onWriteError: () => void) {
       setDoc(doc(refs.stores, storeId(section)), { name: section }).catch((e: unknown) =>
         console.error("お店を保存できませんでした", e),
       );
+    };
+
+    // 足した物を Discord へ知らせる。電波が無ければ、つながったときに送る
+    const notify = (content: string) => {
+      const url = webhookRef.current;
+      if (!url) return;
+      if (!navigator.onLine) {
+        pendingNotes.current.push(content);
+        return;
+      }
+      void postDiscord(url, content);
     };
 
     const touchHistory = (name: string, section: Section, add: number) =>
@@ -201,6 +260,7 @@ export function useList(listKey: string, onWriteError: () => void) {
         const log: DocumentData = { name, section, at: serverTimestamp() };
         if (addedBy) log.addedBy = addedBy;
         setDoc(doc(refs.log), log).catch((e: unknown) => console.error("追加履歴を残せませんでした", e));
+        notify(addedMessage(name, section, note, addedBy));
         return ref.id;
       },
       toggle(item: Item) {
@@ -240,6 +300,14 @@ export function useList(listKey: string, onWriteError: () => void) {
         }
         run(batch.commit());
       },
+      /** Discord のウェブフック URL を入れる。null なら知らせを止める */
+      setWebhook(url: string | null) {
+        run(url ? setDoc(refs.notify, { discord: url }) : deleteDoc(refs.notify));
+      },
+      /** 入れた URL へ試しに送る */
+      testNotify(url: string) {
+        return postDiscord(url, "🛒 買い物リストの知らせはここに届きます");
+      },
       forgetHistory(entry: HistoryEntry) {
         run(deleteDoc(doc(refs.history, entry.id)));
       },
@@ -257,5 +325,5 @@ export function useList(listKey: string, onWriteError: () => void) {
     };
   }, [refs, onWriteError]);
 
-  return { items, history, logs, stores, state, actions };
+  return { items, history, logs, stores, webhook, state, actions };
 }

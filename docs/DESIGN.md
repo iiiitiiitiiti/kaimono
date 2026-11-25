@@ -30,6 +30,7 @@ erDiagram
     LIST ||--o{ HISTORY : remembers
     LIST ||--o{ LOG : records
     LIST ||--o{ STORE : "adds"
+    LIST ||--o| NOTIFY : "tells"
     LIST {
         string key PK "鍵（文書は作らずパスにだけ使う）"
     }
@@ -45,12 +46,16 @@ erDiagram
     STORE {
         string id PK "正規化した店名を encodeURIComponent"
     }
+    NOTIFY {
+        string id PK "settings/notify の1件だけ"
+    }
 ```
 
 - ITEM: 品名・売り場・数量メモ・足した人・チェック済みか・足した時刻・チェックした時刻。
 - HISTORY: 品名ごとの回数・最後に足した時刻・売り場。よく買う物の候補と売り場の推測に使う。品名の同一判定は全角半角・大小・空白・カタカナひらがなを無視（`nameKey`）。
 - LOG: 足すたびに1件。品名・お店・足した人・足した時刻。書き換えない。
 - STORE: 2人が自分で入れたお店の名前（固定の10種は持たない）。ITEM・HISTORY・LOG のお店は店名の文字列で持ち、STORE とはつながない。
+- NOTIFY: 足した物を知らせる Discord のウェブフック URL。無ければ知らせない。
 - 足した人の名前は端末ごとに覚える（localStorage）。
 
 ## 決めたこと
@@ -74,6 +79,9 @@ erDiagram
   - メニューの「お店の整理」で消せる。消したお店の品物とよく買う物は「その他」へ移す。名前の変更はできない（ユーザーが不要と判断）。
   - 一覧に無いお店の品物（相手が消したのと行き違いで足した物など）は、そのお店の名前のまま出す。
   - rules はお店の名前を長さ（1〜20字）だけで見る（`tests/rules.test.ts` が `STORE_MAX` との一致を確かめる）。
+- 足した物を Discord に知らせる（2026-11-25 ユーザー依頼、`docs/decisions/005`）。足したスマホのアプリがウェブフックへ直接送る。URL はメニューの「Discord に知らせる」で入れ、2人で共有する。
+  - 「始める」で先に試しの1件を送り、届いたときだけ保存する。
+  - rules は URL を Discord のウェブフックの形だけ通す（`tests/rules.test.ts` が `WEBHOOK_PATTERN` との一致を確かめる）。
 - まだ買っていない同じ物は二重に足さず、既にある行を光らせる。
 - 行を左になぞると「直す」「消す」が出る（2026-11-04 ユーザー依頼）。品名を押して直す画面を開く道も残す（読み上げやキーボードの人はこちらを使う）。開くのは1行だけで、ほかに触れると閉じる。縦のスクロールは `touch-action: pan-y` でブラウザに任せる。
 - 店で電波が弱くても使えるよう、Firestore の端末内キャッシュ（persistentLocalCache）を使う。書き込みは待たずに画面へ出す。

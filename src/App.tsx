@@ -5,6 +5,7 @@ import {
   checkedItems,
   cleanName,
   cleanStore,
+  cleanWebhook,
   customStores,
   findOpenDuplicate,
   groupBySection,
@@ -212,7 +213,7 @@ function ListScreen({
     () => setError({ id: Date.now(), message: "保存できませんでした。つながってからもう一度試してください" }),
     [],
   );
-  const { items, history, logs, stores: savedStores, state, actions } = useList(listKey, onWriteError);
+  const { items, history, logs, stores: savedStores, webhook, state, actions } = useList(listKey, onWriteError);
   const storeChoices = allStores(savedStores, items);
 
   const [editing, setEditing] = useState<Item | null>(null);
@@ -455,6 +456,9 @@ function ListScreen({
           logs={logs}
           items={items}
           customStores={customStores(savedStores, items)}
+          webhook={webhook}
+          onSetWebhook={(url) => actions.setWebhook(url)}
+          onTestWebhook={(url) => actions.testNotify(url)}
           onForget={(h) => actions.forgetHistory(h)}
           onRemoveStore={(name) => {
             actions.removeStore(name, items, history);
@@ -980,6 +984,100 @@ function EditDialog({
   );
 }
 
+/** メニューの「Discord に知らせる」。入れた URL は2人で共有する */
+function NotifyFold({
+  webhook,
+  onSet,
+  onTest,
+  onToast,
+}: {
+  webhook: string | null;
+  onSet: (url: string | null) => void;
+  onTest: (url: string) => Promise<boolean>;
+  onToast: (m: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const cleaned = cleanWebhook(draft);
+  const send = async (url: string) => {
+    setBusy(true);
+    const ok = await onTest(url);
+    setBusy(false);
+    return ok;
+  };
+
+  return (
+    <details className="fold">
+      <summary>Discord に知らせる{webhook ? "（オン）" : ""}</summary>
+      {webhook ? (
+        <>
+          <p className="muted">足した物を Discord に知らせています</p>
+          <div className="row">
+            <button
+              className="btn"
+              type="button"
+              disabled={busy}
+              onClick={async () => onToast((await send(webhook)) ? "Discord に送りました" : "送れませんでした")}
+            >
+              試しに送る
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                onSet(null);
+                onToast("知らせを止めました");
+              }}
+            >
+              止める
+            </button>
+          </div>
+        </>
+      ) : (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!cleaned) return;
+            // 届くと分かってから2人の設定にする
+            if (await send(cleaned)) {
+              onSet(cleaned);
+              setDraft("");
+              onToast("Discord に知らせを始めました");
+            } else {
+              onToast("送れませんでした。URL を確かめてください");
+            }
+          }}
+        >
+          <p className="muted small">足した人の名前と品物が、Discord のチャンネルに届きます</p>
+          <ol className="steps">
+            <li>Discord で知らせたいチャンネルの設定を開く</li>
+            <li>「連携サービス」から「ウェブフック」を作る</li>
+            <li>「ウェブフック URL をコピー」を押して下に貼る</li>
+          </ol>
+          <label>
+            <span>ウェブフック URL</span>
+            <div className="row">
+              <input
+                type="url"
+                inputMode="url"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="https://discord.com/api/webhooks/…"
+              />
+              <button className="btn" type="submit" disabled={!cleaned || busy}>
+                始める
+              </button>
+            </div>
+          </label>
+          {draft.trim() !== "" && !cleaned && <p className="muted small">Discord のウェブフック URL を貼ってください</p>}
+        </form>
+      )}
+    </details>
+  );
+}
+
 function MenuDialog({
   me,
   onMe,
@@ -987,6 +1085,9 @@ function MenuDialog({
   logs,
   items,
   customStores,
+  webhook,
+  onSetWebhook,
+  onTestWebhook,
   onForget,
   onRemoveStore,
   onClose,
@@ -998,6 +1099,9 @@ function MenuDialog({
   logs: AddLog[];
   items: Item[];
   customStores: Section[];
+  webhook: string | null;
+  onSetWebhook: (url: string | null) => void;
+  onTestWebhook: (url: string) => Promise<boolean>;
   onForget: (h: HistoryEntry) => void;
   onRemoveStore: (name: Section) => void;
   onClose: () => void;
@@ -1050,6 +1154,8 @@ function MenuDialog({
         <button className="btn wide" type="button" onClick={share}>
           一緒に使う人へリンクを送る
         </button>
+
+        <NotifyFold webhook={webhook} onSet={onSetWebhook} onTest={onTestWebhook} onToast={onToast} />
 
         <details className="fold">
           <summary>追加履歴（{logCount}）</summary>

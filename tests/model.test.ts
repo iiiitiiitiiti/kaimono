@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  addedMessage,
   allStores,
+  cleanWebhook,
   checkedBySection,
   cleanStore,
   customStores,
@@ -239,5 +241,34 @@ describe("追加履歴", () => {
 
   it("記録が無ければ空", () => {
     expect(logByDay([], now)).toEqual([]);
+  });
+});
+
+describe("cleanWebhook", () => {
+  const ok = "https://discord.com/api/webhooks/123456789012345678/AbC_d-EF";
+  it("Discord のウェブフック URL だけを通す", () => {
+    expect(cleanWebhook(ok)).toBe(ok);
+    expect(cleanWebhook(`  ${ok}/ `)).toBe(ok);
+    expect(cleanWebhook(`${ok}?wait=true`)).toBe(ok);
+    expect(cleanWebhook("https://discordapp.com/api/webhooks/1/x")).toBe("https://discordapp.com/api/webhooks/1/x");
+    expect(cleanWebhook("https://ptb.discord.com/api/webhooks/1/x")).toBe("https://ptb.discord.com/api/webhooks/1/x");
+  });
+  it("ほかの URL や形の違うものは null", () => {
+    expect(cleanWebhook("")).toBeNull();
+    expect(cleanWebhook("http://discord.com/api/webhooks/1/x")).toBeNull();
+    expect(cleanWebhook("https://evil.example/api/webhooks/1/x")).toBeNull();
+    expect(cleanWebhook("https://discord.com.evil.example/api/webhooks/1/x")).toBeNull();
+    expect(cleanWebhook("https://discord.com/api/webhooks/abc/x")).toBeNull();
+    expect(cleanWebhook("https://discord.com/channels/1/2")).toBeNull();
+  });
+});
+
+describe("addedMessage", () => {
+  it("足した人・品名・お店・メモを入れる", () => {
+    expect(addedMessage("牛乳", "スーパー", "", "たろう")).toBe("🛒 たろうが「牛乳」を足しました（スーパー）");
+    expect(addedMessage("牛乳", "スーパー", "低脂肪", "")).toBe("🛒 だれかが「牛乳」を足しました（スーパー）\nメモ: 低脂肪");
+  });
+  it("Discord の装飾に化ける記号は打ったとおりに出す", () => {
+    expect(addedMessage("*特売*_卵_", "スーパー", "", "a")).toBe("🛒 aが「\\*特売\\*\\_卵\\_」を足しました（スーパー）");
   });
 });

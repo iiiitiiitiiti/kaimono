@@ -257,3 +257,31 @@ export function logByDay(logs: AddLog[], now: number): LogDay[] {
   }
   return days;
 }
+
+/**
+ * Discord のウェブフック URL の形。firestore.rules の validNotify も同じ文字列で確かめる
+ * （rules に書き写しやすいよう、バックスラッシュを使わない書き方にしている）
+ */
+export const WEBHOOK_PATTERN =
+  "^https://((ptb|canary)[.])?discord(app)?[.]com/api/webhooks/[0-9]{1,25}/[A-Za-z0-9_-]{1,100}$";
+const WEBHOOK_RE = new RegExp(WEBHOOK_PATTERN);
+
+/** 貼られたウェブフック URL を整える。形が違えば null */
+export function cleanWebhook(raw: string): string | null {
+  // Discord のコピーには付かないが、末尾の / や ?以降が付いて貼られても通す
+  const s = raw.trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
+  return WEBHOOK_RE.test(s) ? s : null;
+}
+
+/** Discord で太字やリンクに化けないよう、記号の前に \ を付ける */
+function escapeDiscord(s: string): string {
+  return s.replace(/[\\*_~`|>#[\]<]/g, (c) => `\\${c}`);
+}
+
+/** 品物を足したときに Discord へ送る文 */
+export function addedMessage(name: string, section: Section, note: string, addedBy: string): string {
+  const who = addedBy || "だれか";
+  let s = `🛒 ${escapeDiscord(who)}が「${escapeDiscord(name)}」を足しました（${escapeDiscord(section)}）`;
+  if (note) s += `\nメモ: ${escapeDiscord(note)}`;
+  return s;
+}
