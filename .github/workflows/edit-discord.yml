@@ -1,0 +1,40 @@
+name: Edit Discord notice
+
+# 前に Discord へ送った公開の知らせを書き換える（docs/decisions/007）。手で動かす。
+#   gh workflow run edit-discord.yml -f message=last -f notes="1行目
+#   2行目"
+# 送り先（DISCORD_WEBHOOK_URL）は GitHub のシークレットにしか無いので、書き換えもここで動かす。
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: last（最後に送った投稿）か、Discord の「メッセージリンクをコピー」のリンク
+        required: true
+        default: last
+      notes:
+        description: 書き換えた後の変わった点（1行に1つ。残す行もすべて書く）
+        required: true
+      dry_run:
+        description: 送らずに中身だけ出す
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Edit the Discord message
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          APP_NAME: かいもの
+          EDIT_MESSAGE: ${{ inputs.message }}
+          NOTES_TEXT: ${{ inputs.notes }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: bash .github/notify-discord.sh
