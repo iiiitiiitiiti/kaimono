@@ -50,3 +50,25 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # 公開が済んだら、コミットの本文の「お知らせ: 〜」の行を Discord に知らせる（docs/decisions/006）。
+  # 行き先（DISCORD_WEBHOOK_URL）を GitHub のシークレットに入れていなければ何もしない。
+  notify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tell Discord what changed
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMITS: ${{ toJSON(github.event.commits) }}
+          GH_TOKEN: ${{ github.token }}
+          APP_NAME: かいもの
+          WORKFLOW_FILE: deploy.yml
+        run: bash .github/notify-discord.sh
