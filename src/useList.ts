@@ -13,8 +13,8 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
+import { createBatcher, sendDiscord } from "./notify";
 import {
-  addedMessage,
   cleanWebhook,
   historyId,
   isCustomStore,
@@ -22,6 +22,7 @@ import {
   LOG_DAYS,
   OTHER,
   storeId,
+  type AddedLine,
   type AddLog,
   type HistoryEntry,
   type Item,
@@ -66,23 +67,6 @@ function toLog(id: string, d: DocumentData): AddLog {
   };
 }
 
-/** Discord へ送る。送れたら true。届かなかった理由はコンソールにだけ出す */
-async function postDiscord(url: string, content: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // 品名に @everyone などが入っても、だれも呼び出さない
-      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
-    });
-    if (!res.ok) console.error("Discord に送れませんでした", res.status);
-    return res.ok;
-  } catch (e) {
-    console.error("Discord に送れませんでした", e);
-    return false;
-  }
-}
-
 /** 一度に消す古い追加履歴の上限（1回の書き込みにまとめられる数に収める） */
 const PRUNE_MAX = 400;
 
@@ -97,7 +81,9 @@ export function useList(listKey: string, onWriteError: () => void) {
   const [webhook, setWebhookState] = useState<string | null>(null);
   const webhookRef = useRef<string | null>(null);
   // 電波が無くて送れなかった知らせ。つながったら送り直す（アプリを閉じると消える）
-  const pendingNotes = useRef<string[]>([]);
+  const pendingNotes = useRef<AddedLine[]>([]);
+  // 続けて足した物を1つの投稿にまとめる
+  const [batcher] = useState(() => createBatcher(sendDiscord));
   const pruned = useRef(false);
   const [state, setState] = useState<LoadState>("loading");
 
@@ -199,11 +185,11 @@ export function useList(listKey: string, onWriteError: () => void) {
       const url = webhookRef.current;
       const notes = pendingNotes.current.splice(0);
       if (!url) return;
-      for (const n of notes) void postDiscord(url, n);
+      for (const n of notes) void batcher.add(url, n);
     };
     window.addEventListener("online", flush);
     return () => window.removeEventListener("online", flush);
-  }, []);
+  }, [batcher]);
 
   const actions = useMemo(() => {
     // 書き込みは待たない（電波が無くても画面にはすぐ出し、つながったら送られる）
@@ -223,14 +209,14 @@ export function useList(listKey: string, onWriteError: () => void) {
     };
 
     // 足した物を Discord へ知らせる。電波が無ければ、つながったときに送る
-    const notify = (content: string) => {
+    const notify = (line: AddedLine) => {
       const url = webhookRef.current;
       if (!url) return;
       if (!navigator.onLine) {
-        pendingNotes.current.push(content);
+        pendingNotes.current.push(line);
         return;
       }
-      void postDiscord(url, content);
+      void batcher.add(url, line);
     };
 
     const touchHistory = (name: string, section: Section, add: number) =>
@@ -260,7 +246,7 @@ export function useList(listKey: string, onWriteError: () => void) {
         const log: DocumentData = { name, section, at: serverTimestamp() };
         if (addedBy) log.addedBy = addedBy;
         setDoc(doc(refs.log), log).catch((e: unknown) => console.error("追加履歴を残せませんでした", e));
-        notify(addedMessage(name, section, note, addedBy));
+        notify({ name, section, note, addedBy });
         return ref.id;
       },
       toggle(item: Item) {
@@ -306,7 +292,7 @@ export function useList(listKey: string, onWriteError: () => void) {
       },
       /** 入れた URL へ試しに送る */
       testNotify(url: string) {
-        return postDiscord(url, "🛒 買い物リストの知らせはここに届きます");
+        return sendDiscord(url, "🛒 買い物リストの知らせはここに届きます", null).then((id) => id !== null);
       },
       forgetHistory(entry: HistoryEntry) {
         run(deleteDoc(doc(refs.history, entry.id)));
@@ -323,7 +309,7 @@ export function useList(listKey: string, onWriteError: () => void) {
         run(batch.commit());
       },
     };
-  }, [refs, onWriteError]);
+  }, [refs, onWriteError, batcher]);
 
   return { items, history, logs, stores, webhook, state, actions };
 }

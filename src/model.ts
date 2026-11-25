@@ -285,3 +285,24 @@ export function addedMessage(name: string, section: Section, note: string, added
   if (note) s += `\nメモ: ${escapeDiscord(note)}`;
   return s;
 }
+
+/** Discord へ知らせる1品 */
+export interface AddedLine {
+  name: string;
+  section: Section;
+  note: string;
+  addedBy: string;
+}
+
+/** 続けて足した物をまとめた投稿の文。1品だけなら addedMessage と同じ */
+export function batchMessage(lines: AddedLine[]): string {
+  if (lines.length === 1) {
+    const l = lines[0];
+    return addedMessage(l.name, l.section, l.note, l.addedBy);
+  }
+  const who = escapeDiscord(lines[0].addedBy || "だれか");
+  const rows = lines.map(
+    (l) => `・${escapeDiscord(l.name)}（${escapeDiscord(l.section)}）${l.note ? ` メモ: ${escapeDiscord(l.note)}` : ""}`,
+  );
+  return [`🛒 ${who}が${lines.length}品を足しました`, ...rows].join("\n");
+}
