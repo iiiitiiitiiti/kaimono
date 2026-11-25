@@ -71,4 +71,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           APP_NAME: かいもの
           WORKFLOW_FILE: deploy.yml
+          ID_FILE: message-id.txt
         run: bash .github/notify-discord.sh
+      # 送った投稿の番号を残す。あとで discord-edit の流れが「最後の投稿」を書き直すのに使う
+      - name: Keep the message id
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-message
+          path: message-id.txt
+          if-no-files-found: ignore
+          retention-days: 90
