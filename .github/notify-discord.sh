@@ -103,7 +103,7 @@ else
   fi
 fi
 
-TEXT=$(printf '## %sを更新しました\n%s\n-# アプリを一度閉じて開き直すと新しい版になります' "$APP_NAME" "$NOTES")
+TEXT=$(printf '## %sを更新しました\n%s\n-# アプリを一度閉じて開き直すと新しい版になります\n-# 前のままなら、何度か開き直してください' "$APP_NAME" "$NOTES")
 PAYLOAD=$(jq -n --arg content "$TEXT" '{content: $content[:1900], allowed_mentions: {parse: []}}')
 
 RESP=$(mktemp)
